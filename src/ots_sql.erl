@@ -55,7 +55,7 @@ encode_ts_rows(#ts_rows{measurement = Measurement, rows = Rows}) ->
 %% -------------------------------------------------------------------------------------------------
 %% row
 
-encode_ts_row(FieldsList, #ts_row{tags = Tags, time = Time, fields = Fields}) ->
+encode_ts_row(FieldsList, #ts_row{data_source = DS, tags = Tags, time = Time, fields = Fields}) ->
     TagsBinary = encode_ts_tags(Tags),
     FieldsBinary = encode_fields(FieldsList, Fields),
     ok.

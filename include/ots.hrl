@@ -64,6 +64,7 @@
 -type fields()      :: [field()].
 
 -record(ts_row, {
+    data_source :: ots_key(),
     tags = []   :: tags(),
     time        :: time(),
     fields = [] :: fields()
