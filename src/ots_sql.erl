@@ -23,8 +23,6 @@
 
 -export([ encode/1]).
 
--export([encode_ts_tags/1]).
-
 ts_row(Tags, Fields) ->
     ts_row(Tags, erlang:system_time(microsecond), Fields).
 
@@ -47,8 +45,8 @@ encode(TSRows) when is_record(TSRows, ts_rows) ->
 %% -------------------------------------------------------------------------------------------------
 %% rows
 
-encode_ts_rows(TRows = #ts_rows{measurement = Measurement, rows = Rows}) ->
-    list_to_binary([root_type_header(TRows) | encode_row_group(TRows)]).
+encode_ts_rows(TRows) ->
+    [root_type_header(TRows) | encode_row_group(TRows)].
 
 root_type_header(#ts_rows{rows = Rows}) ->
     RowsCount = erlang:length(Rows),
@@ -105,12 +103,15 @@ encode_row_group(#ts_rows{measurement = M, rows = Rows}) ->
         FieldNamesBinary,
         FieldTypesBinary
     ],
-    [Part2, encode_ts_row(FieldsNames, Rows)].
+    [Part2, encode_ts_row(RowsOffset, FieldsNames, Rows)].
 
 %% -------------------------------------------------------------------------------------------------
 %% row in group
+encode_ts_row(_RowsOffset, FieldsNames, Rows) ->
+    % TODO: offset
+    encode_ts_row_(FieldsNames, hd(Rows)).
 
-encode_ts_row(FieldsNames, #ts_row{data_source = DS, tags = Tags, time = Time, fields = Fields}) ->
+encode_ts_row_(FieldsNames, #ts_row{data_source = DS, tags = Tags, time = Time, fields = Fields}) ->
     Part1 = <<
     20, 0, 0,  0,
     12, 0, 28, 0,
@@ -130,8 +131,9 @@ encode_ts_row(FieldsNames, #ts_row{data_source = DS, tags = Tags, time = Time, f
     TimeBinary = encode_time(Time),
 
     FieldValuesBinary = encode_field_values(Fields, Fields),
-    FieldValuesSize = erlang:size(FieldValuesBinary),
-    FieldValuesOffset = DataSourceSize + 4 + 8,
+    % TODO: use FieldValuesSize next row
+    % FieldValuesSize = erlang:size(FieldValuesBinary),
+    FieldValuesOffset = DataSourceSize + TagsSize + 4 + 8,
 
     %% TODO: client cache up time ?
     MetaCacheUpdateTimeBinary = <<0:32>>,
@@ -172,9 +174,9 @@ encode_field_values(FieldsList, Fields) ->
 
 encode_field_value([], _Fields, Res) ->
     Fun =
-        fun(K, V, R) ->
-            Values = encode_type_list(K, lists:reverse(V)),
-            maps:put(K, Values, R)
+        fun(Type, V, R) ->
+            Values = encode_type_list(Type, lists:reverse(V)),
+            maps:put(Type, Values, R)
         end,
     maps:fold(Fun, #{}, Res);
 encode_field_value([Key = {_, Type} | FieldsList], Fields, Res) ->
@@ -241,8 +243,8 @@ fields_info(Row = #ts_row{fields = Fields}) when is_map(Fields) ->
 fields_info(#ts_row{fields = Fields}) when is_list(Fields) ->
     #{
         field_names_binary => encode_field_names(Fields),
-        field_types_binary => encode_field_names(Fields),
-        field_names => [Name || {Name, _} <- Fields],
+        field_types_binary => encode_field_types(Fields),
+        field_names => [Name || {Name, _} <- Fields]
     }.
 
 encode_field_names(Fields) ->
@@ -255,31 +257,11 @@ encode_field_types(Fields) ->
     Types = padding(list_to_binary([field_type(Field) || Field <- Fields])),
     Size = erlang:length(Fields),
     SizeBinary = <<Size:4/little-signed-integer-unit:8>>,
-    <<SizeBinary, Types/binary>>.
+    <<SizeBinary/binary, Types/binary>>.
 
 field_name({{Key, _Type}, _}) -> to_binary(Key).
 
-field_type({{Key, Type}, _Value}) -> {Key, Type};
-% Type derivation, maybe remove these func
-field_type({Key, Value}) when is_integer(Value) -> {Key, ?OTS_LONG};
-field_type({Key, Value}) when is_boolean(Value) -> {Key, ?OTS_BOOLEAN};
-field_type({Key, Value}) when is_float(Value)   -> {Key, ?OTS_DOUBLE};
-field_type({Key, Value}) when is_list(Value)    -> {Key, ?OTS_STRING};
-field_type({Key, Value}) when is_binary(Value)  -> {Key, ?OTS_BINARY};
-field_type({Key, Value}) when is_atom(Value)    -> {Key, ?OTS_STRING}.
-
-%% -------------------------------------------------------------------------------------------------
-%% util
-to_binary(X) when is_binary(X)  -> X;
-to_binary(X) when is_list(X)    -> list_to_binary(X);
-to_binary(X) when is_integer(X) -> integer_to_binary(X);
-to_binary(X) when is_float(X)   -> float_to_binary(X, [{decimals, 10}, compact]);
-to_binary(X) when is_atom(X)    -> atom_to_binary(X, utf8).
-
-padding(Bin) when is_binary(Bin) ->
-    Size = erlang:size(Bin),
-    Padding = (4 - (Size rem 4)) * 8,
-    <<Bin/binary, 0:Padding>>.
+field_type({{Key, Type}, _Value}) -> Type.
 
 %% -------------------------------------------------------------------------------------------------
 %% long
@@ -290,7 +272,7 @@ encode_long_list(List) ->
     <<Len:4/little-signed-integer-unit:8, Binary/binary>>.
 
 encode_long(Long) ->
-    <<Long:4/little-signed-integer-unit:8>>.
+    <<Long:4/little-signed-integer-unit:16>>.
 
 %% -------------------------------------------------------------------------------------------------
 %% boolean
@@ -317,8 +299,21 @@ encode_double(Data) ->
 %% -------------------------------------------------------------------------------------------------
 %% string
 
-encode_string_list(_List) ->
-    ok.
+encode_string_list(List) ->
+    Len = erlang:length(List),
+    StartOffset = Len * 4,
+    StringListVector = encode_string_in_list(StartOffset, List, {[], []}),
+    [<<Len:4/little-signed-integer-unit:8>>, StringListVector].
+
+encode_string_in_list(_, [], {OffsetList, BinaryList}) ->
+    [lists:reverse(OffsetList), lists:reverse(BinaryList)];
+encode_string_in_list(StartOffset, [String | List], {OffsetList, BinaryList}) ->
+    Binary = encode_string(String),
+    Size = erlang:size(Binary),
+    NextOffset = StartOffset + Size - 4,
+    OffsetBinary = <<StartOffset:4/little-signed-integer-unit:8>>,
+    encode_string_in_list(NextOffset, List,
+        {[OffsetBinary | OffsetList], [Binary | BinaryList]}).
 
 encode_string(Data) ->
     Binary = to_binary(Data),
@@ -337,5 +332,37 @@ string_padding(Bin) ->
 
 %% -------------------------------------------------------------------------------------------------
 %% binary
-encode_binary_list(_List) ->
-    ok.
+
+encode_binary_list(List) ->
+    Len = erlang:length(List),
+    StartOffset = Len * 4,
+    StringListVector = encode_binary_in_list(StartOffset, List, {[], []}),
+    [<<Len:4/little-signed-integer-unit:8>>, StringListVector].
+
+encode_binary_in_list(_, [], {OffsetList, BinaryList}) ->
+    [lists:reverse(OffsetList), lists:reverse(BinaryList)];
+encode_binary_in_list(StartOffset, [Binary | List], {OffsetList, BinaryList}) ->
+    BinaryEncode = encode_binary(Binary),
+    Size = erlang:size(BinaryEncode),
+    NextOffset = StartOffset + Size - 4,
+    OffsetBinary = <<StartOffset:4/little-signed-integer-unit:8>>,
+    encode_binary_in_list(NextOffset, List,
+        {[OffsetBinary | OffsetList], [ BinaryEncode| BinaryList]}).
+
+encode_binary(Binary) ->
+    Size = erlang:size(Binary),
+    Binary1 = padding(Binary),
+    <<Size:4/little-signed-integer-unit:8, Binary1/binary>>.
+
+%% -------------------------------------------------------------------------------------------------
+%% util
+to_binary(X) when is_binary(X)  -> X;
+to_binary(X) when is_list(X)    -> list_to_binary(X);
+to_binary(X) when is_integer(X) -> integer_to_binary(X);
+to_binary(X) when is_float(X)   -> float_to_binary(X, [{decimals, 10}, compact]);
+to_binary(X) when is_atom(X)    -> atom_to_binary(X, utf8).
+
+padding(Bin) when is_binary(Bin) ->
+    Size = erlang:size(Bin),
+    Padding = (4 - (Size rem 4)) * 8,
+    <<Bin/binary, 0:Padding>>.

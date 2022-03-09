@@ -42,7 +42,7 @@
 -type tags()        :: [tag()] | map().
 
 %% by microsecond
--type time()        :: pos_integer().
+-type time()        :: pos_integer() | undefined.
 
 -type field_type()  :: ?OTS_LONG
                      | ?OTS_BOOLEAN
@@ -61,7 +61,7 @@
 
 -type field()       :: {field_key(), field_value()}.
 
--type fields()      :: [field()].
+-type fields()      :: [field()] | map().
 
 -record(ts_row, {
     data_source :: ots_key(),
