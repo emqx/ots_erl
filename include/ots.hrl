@@ -26,7 +26,7 @@
 -define(OTS_BINARY,  5).
 
 %% some names: measurement, source ,table
--type table() :: ots_key().
+-type table()       :: ots_key().
 
 -type tag_key()     :: ots_key().
 
