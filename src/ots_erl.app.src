@@ -5,7 +5,9 @@
   {mod, {ots_erl_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    iso8601,
+    hackney
    ]},
   {env,[]},
   {modules, []},

@@ -14,6 +14,18 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
+-define(OTS_CLIENT_TS, time_series).
+-define(OTS_CLIENT_WC, wide_column).
+
+-type ots_client_type() :: ?OTS_CLIENT_TS | ?OTS_CLIENT_WC.
+
+-record(ots_client, {
+    pool                :: term(),
+    type = time_series  :: ots_client_type(),
+    instance            :: binary(),
+    access_key          :: binary(),
+    access_secret       :: binary()
+}).
 
 -type ots_key()     :: atom()
                      | string()

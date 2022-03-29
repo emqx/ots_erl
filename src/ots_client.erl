@@ -16,43 +16,67 @@
 
 -module(ots_client).
 
--behaviour(gen_server).
+-include("ots.hrl").
+-include("ots_ep.hrl").
 
--export([ start_link/0]).
-
--export([ init/1
-        , handle_call/3
-        , handle_cast/2
-        , handle_info/2
-        , terminate/2
-        , code_change/3
+-export([ start/1
+        , list_ts_tables/1
+        , stop/1
         ]).
 
--define(SERVER, ?MODULE).
+-export([ pool/1
+        , type/1
+        , instance/1
+        , access_key/1
+        , access_secret/1
+        ]).
 
--record(state, {}).
+start(Opts) when is_map(Opts) -> start(maps:to_list(Opts));
+start(Opts) when is_list(Opts) ->
+    Pool = proplists:get_value(pool, Opts),
+    Type = proplists:get_value(type, Opts, ?OTS_CLIENT_TS),
+    Instance = proplists:get_value(instance, Opts),
+    AccessKey = proplists:get_value(access_key, Opts),
+    AccessSecret = proplists:get_value(access_secret, Opts),
+    Client = #ots_client{
+        pool = Pool,
+        type = Type,
+        instance = Instance,
+        access_key = AccessKey,
+        access_secret = AccessSecret
+    },
+    start_client(Client, Opts).
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+stop(Client) ->
+    Pool = pool(Client),
+    hackney_pool:stop_pool(Pool).
 
-init([]) ->
-    {ok, #state{}}.
+list_ts_tables(Client) ->
+    ots_http:request(Client, ?LIST_TIMESERIES_TABLE, <<"">>).
 
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+%% -------------------------------------------------------------------------------------------------
+%% internal
 
-handle_cast(_Request, State) ->
-    {noreply, State}.
+start_client(Client, Opts) ->
+    Pool = pool(Client),
+    PoolSize = proplists:get_value(pool_size, Opts, 8),
+    PoolOptions = [
+        {pool_size, PoolSize},
+        {timeout, 150000},
+        {max_connections, PoolSize * 8}
+    ],
+    case hackney_pool:start_pool(Pool, PoolOptions) of
+        ok ->
+            {ok, Client};
+        Error ->
+            Error
+    end.
 
-handle_info(_Info, State) ->
-    {noreply, State}.
+%% -------------------------------------------------------------------------------------------------
+%% app internal
 
-terminate(_Reason, _State) ->
-    ok.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
+pool(#ots_client{pool = P}) -> P.
+type(#ots_client{type = T}) -> T.
+instance(#ots_client{instance = I}) -> I.
+access_key(#ots_client{access_key = K}) -> K.
+access_secret(#ots_client{access_secret = S}) -> S.
