@@ -22,10 +22,52 @@
 -record(ots_client, {
     pool                :: term(),
     type = time_series  :: ots_client_type(),
+    endpoint            :: binary(),
     instance            :: binary(),
     access_key          :: binary(),
     access_secret       :: binary()
 }).
+
+%% table end point
+-define(CREATE_TABLE                , "CreateTable").
+-define(LIST_TABLE                  , "ListTable").
+-define(DELETE_TABLE                , "DeleteTable").
+-define(UPDATE_TABLE                , "UpdateTable").
+-define(DESCRIBE_TABLE              , "DescribeTable").
+-define(COMPUTE_SPLIT_POINTS_BY_SIZE, "ComputeSplitPointsBySize").
+
+%% single row
+-define(GET_ROW                     , "GetRow").
+-define(PUT_ROW                     , "PutRow").
+-define(UPDATE_ROW                  , "UpdateRow").
+-define(DELETE_ROW                  , "DeleteRow").
+
+%% batch row
+-define(GET_RANGE                   , "GetRange").
+-define(BATCH_GET_ROW               , "BatchGetRow").
+-define(BATCH_WRITE_ROW             , "BatchWriteRow").
+
+%% stream
+-define(LIST_STREAM                 , "ListStream").
+-define(DESCRIBE_STREAM             , "DescribeStream").
+-define(GET_SHARD_ITERATOR          , "GetShardIterator").
+-define(GET_STREAM_RECORD           , "GetStreamRecord").
+
+%% index
+-define(CREATE_INDEX                , "CreateIndex").
+-define(DELETE_INDEX                , "DeleteIndex").
+
+%% time series
+-define(CREATE_TIMESERIES_TABLE     , "CreateTimeseriesTable").
+-define(LIST_TIMESERIES_TABLE       , "ListTimeseriesTable").
+-define(UPDATE_TIMESERIES_TABLE     , "UpdateTimeseriesTable").
+-define(DESCRIBE_TIMESERIES_TABLE   , "DescribeTimeseriesTable").
+-define(DELETE_TIMESERIES_TABLE     , "DeleteTimeseriesTable").
+-define(PUT_TIMESERIES_DATA         , "PutTimeseriesData").
+-define(GET_TIMESERIES_DATA         , "GetTimeseriesData").
+-define(QUERY_TIMESERIES_META       , "QueryTimeseriesMeta").
+-define(UPDATE_TIMESERIES_META      , "UpdateTimeseriesMeta").
+-define(DELETE_TIMESERIES_META      , "DeleteTimeseriesMeta").
 
 -type ots_key()     :: atom()
                      | string()

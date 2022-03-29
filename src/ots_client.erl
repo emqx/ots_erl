@@ -17,7 +17,6 @@
 -module(ots_client).
 
 -include("ots.hrl").
--include("ots_ep.hrl").
 
 -export([ start/1
         , list_ts_tables/1
@@ -26,16 +25,35 @@
 
 -export([ pool/1
         , type/1
+        , endpoint/1
         , instance/1
         , access_key/1
         , access_secret/1
         ]).
+
+-export([test/0]).
+
+test() ->
+    % ots_client:test().
+    Opts = [
+        {pool, test_demo_pool},
+        {endpoint, "https://emqx-demo.cn-hangzhou.ots.aliyuncs.com/"},
+        {instance, "emqx-demo"},
+        {access_key, "LTAI5tETEEvA4D7ctpSYvmEg"},
+        {access_secret, "6rEq8kuTlLAaTPlEG86V7ip6YjELBQ"},
+        {pool_size, 1}
+    ],
+    {ok, Client} = start(Opts),
+    Res = list_ts_tables(Client),
+    io:format("Res ~p~n", [Res]),
+    ok.
 
 start(Opts) when is_map(Opts) -> start(maps:to_list(Opts));
 start(Opts) when is_list(Opts) ->
     Client = #ots_client{
         pool          = proplists:get_value(pool, Opts),
         type          = proplists:get_value(type, Opts, ?OTS_CLIENT_TS),
+        endpoint      = proplists:get_value(endpoint, Opts),
         instance      = proplists:get_value(instance, Opts),
         access_key    = proplists:get_value(access_key, Opts),
         access_secret = proplists:get_value(access_secret, Opts)
@@ -72,6 +90,7 @@ start_client(Client, Opts) ->
 
 pool(#ots_client{pool = P}) -> P.
 type(#ots_client{type = T}) -> T.
+endpoint(#ots_client{endpoint = E}) -> E.
 instance(#ots_client{instance = I}) -> I.
 access_key(#ots_client{access_key = K}) -> K.
 access_secret(#ots_client{access_secret = S}) -> S.

@@ -17,12 +17,11 @@
 -module(ots_http).
 
 -include("ots.hrl").
--include("ots_ep.hrl").
 
 -export([request/3]).
 
-request(Client, EndPoint, Body) ->
-    Headers = headers(Client, EndPoint, Body),
+request(Client, Action, Body) ->
+    Headers = headers(Client, Body),
     Pool = ots_client:pool(Client),
     Options = [
         {pool, Pool},
@@ -32,7 +31,8 @@ request(Client, EndPoint, Body) ->
         {max_redirect, 5},
         with_body
     ],
-    Url = list_to_binary([ots_client:instance(Client), EndPoint]),
+    Url = list_to_binary([ots_client:endpoint(Client), Action]),
+    io:format("url ~p~n", [Url]),
     case hackney:request(post, Url, Headers, Body, Options) of
         {ok, StatusCode, _Headers, ResponseBody}
             when StatusCode =:= 200
@@ -44,32 +44,34 @@ request(Client, EndPoint, Body) ->
             {error, Reason}
     end.
 
-headers(Client, EndPoint, Body) ->
+headers(Client, Body) ->
     case ots_client:type(Client) of
         ?OTS_CLIENT_TS ->
-            ts_headers(Client, EndPoint, Body);
+            ts_headers(Client, Body);
         ?OTS_CLIENT_WC ->
             error({error, not_support})
     end.
 
-ts_headers(Client, EndPoint, Body) ->
+ts_headers(Client, Body) ->
     %% Order by string name.
     %% If you don't know the rules of sorting, don't change it.
+    EndPoint = ots_client:endpoint(Client),
     InstanceName = ots_client:instance(Client),
     AccessKey = ots_client:access_key(Client),
     AccessSecret = ots_client:access_secret(Client),
+    % Date = iso8601:format(calendar:universal_time()),
+    Date = calendar:system_time_to_rfc3339(erlang:system_time(millisecond), [{unit, millisecond}]),
     HeadersPart1 = [
         {<<"x-ots-accesskeyid">>, AccessKey},
         {<<"x-ots-apiversion">>, <<"2015-12-31">>},
         {<<"x-ots-contentmd5 ">>, base64:encode(erlang:md5(Body))},
-        {<<"x-ots-date">>, iso8601:format(calendar:universal_time())},
+        {<<"x-ots-date">>, Date},
         {<<"x-ots-instancename">>, InstanceName}
     ],
     Sign = {<<"x-ots-signature">>, sign(EndPoint, AccessSecret, HeadersPart1)},
     [Sign | HeadersPart1].
 
 sign(EndPoint, AccessSecret, HeadersPart1) ->
-    AccessSecret = <<"AccessKeyID">>,
     StringToSign = [
         EndPoint,
         "\nPOST\n\n"
