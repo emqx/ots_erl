@@ -33,17 +33,12 @@
 
 start(Opts) when is_map(Opts) -> start(maps:to_list(Opts));
 start(Opts) when is_list(Opts) ->
-    Pool = proplists:get_value(pool, Opts),
-    Type = proplists:get_value(type, Opts, ?OTS_CLIENT_TS),
-    Instance = proplists:get_value(instance, Opts),
-    AccessKey = proplists:get_value(access_key, Opts),
-    AccessSecret = proplists:get_value(access_secret, Opts),
     Client = #ots_client{
-        pool = Pool,
-        type = Type,
-        instance = Instance,
-        access_key = AccessKey,
-        access_secret = AccessSecret
+        pool          = proplists:get_value(pool, Opts),
+        type          = proplists:get_value(type, Opts, ?OTS_CLIENT_TS),
+        instance      = proplists:get_value(instance, Opts),
+        access_key    = proplists:get_value(access_key, Opts),
+        access_secret = proplists:get_value(access_secret, Opts)
     },
     start_client(Client, Opts).
 
