@@ -21,7 +21,7 @@
 -export([request/3]).
 
 request(Client, Action, Body) ->
-    Headers = headers(Client, Body),
+    Headers = headers(Client, Action, Body),
     Pool = ots_client:pool(Client),
     Options = [
         {pool, Pool},
@@ -32,7 +32,6 @@ request(Client, Action, Body) ->
         with_body
     ],
     Url = list_to_binary([ots_client:endpoint(Client), Action]),
-    io:format("url ~p~n", [Url]),
     case hackney:request(post, Url, Headers, Body, Options) of
         {ok, StatusCode, _Headers, ResponseBody}
             when StatusCode =:= 200
@@ -44,38 +43,37 @@ request(Client, Action, Body) ->
             {error, Reason}
     end.
 
-headers(Client, Body) ->
+headers(Client, Action, Body) ->
     case ots_client:type(Client) of
         ?OTS_CLIENT_TS ->
-            ts_headers(Client, Body);
+            ts_headers(Client, Action, Body);
         ?OTS_CLIENT_WC ->
             error({error, not_support})
     end.
 
-ts_headers(Client, Body) ->
+ts_headers(Client, Action, Body) ->
     %% Order by string name.
+    %% [{header_a, _}, {header_b, _}, ....]
     %% If you don't know the rules of sorting, don't change it.
-    EndPoint = ots_client:endpoint(Client),
-    InstanceName = ots_client:instance(Client),
-    AccessKey = ots_client:access_key(Client),
-    AccessSecret = ots_client:access_secret(Client),
-    % Date = iso8601:format(calendar:universal_time()),
-    Date = calendar:system_time_to_rfc3339(erlang:system_time(millisecond), [{unit, millisecond}]),
     HeadersPart1 = [
-        {<<"x-ots-accesskeyid">>, AccessKey},
-        {<<"x-ots-apiversion">>, <<"2015-12-31">>},
-        {<<"x-ots-contentmd5 ">>, base64:encode(erlang:md5(Body))},
-        {<<"x-ots-date">>, Date},
-        {<<"x-ots-instancename">>, InstanceName}
+        {<<"x-ots-accesskeyid">>  , ots_client:access_key(Client)},
+        {<<"x-ots-apiversion">>   , <<"2015-12-31">>},
+        {<<"x-ots-contentmd5">>   , base64:encode(erlang:md5(Body))},
+        {<<"x-ots-date">>         , iso8601_now()},
+        {<<"x-ots-instancename">> , ots_client:instance(Client)}
     ],
-    Sign = {<<"x-ots-signature">>, sign(EndPoint, AccessSecret, HeadersPart1)},
-    [Sign | HeadersPart1].
+    Sign = {<<"x-ots-signature">>, sign(Action, ots_client:access_secret(Client), HeadersPart1)},
+    lists:append(HeadersPart1, [Sign]).
 
-sign(EndPoint, AccessSecret, HeadersPart1) ->
+iso8601_now() ->
+    {DatePart1, {H, M, S}} = calendar:universal_time(),
+    iso8601:format({DatePart1, {H, M, S * 1.0}}).
+
+sign(Action, AccessSecret, HeadersPart1) ->
     StringToSign = [
-        EndPoint,
+        Action,
         "\nPOST\n\n"
     ],
     SignData = list_to_binary(
         [StringToSign | [[string:trim(H), ":", string:trim(V), "\n"] ||{H, V} <- HeadersPart1]]),
-    crypto:mac(hmac, sha, AccessSecret, SignData).
+    base64:encode(crypto:mac(hmac, sha, AccessSecret, SignData)).

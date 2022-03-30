@@ -34,19 +34,27 @@
 -export([test/0]).
 
 test() ->
+    %% remove this fun after released
     % ots_client:test().
     Opts = [
         {pool, test_demo_pool},
-        {endpoint, "https://emqx-demo.cn-hangzhou.ots.aliyuncs.com/"},
-        {instance, "emqx-demo"},
-        {access_key, "LTAI5tETEEvA4D7ctpSYvmEg"},
-        {access_secret, "6rEq8kuTlLAaTPlEG86V7ip6YjELBQ"},
+        {endpoint, <<"https://emqx-demo.cn-hangzhou.ots.aliyuncs.com">>},
+        {instance, <<"emqx-demo">>},
+        {access_key, <<"LTAI5tETEEvA4D7ctpSYvmEg">>},
+        {access_secret, <<"not pwd in github">>},
         {pool_size, 1}
     ],
     {ok, Client} = start(Opts),
-    Res = list_ts_tables(Client),
-    io:format("Res ~p~n", [Res]),
+    case list_ts_tables(Client) of
+        {error, {Code, Resp}} ->
+            io:format("Res ~p ~s ~n", [Code, to_str(Resp)]);
+        {ok, R} ->
+            io:format("~s~n", [to_str(R)])
+    end,
     ok.
+
+to_str(B) when is_binary(B) -> binary_to_list(B);
+to_str(B) -> B.
 
 start(Opts) when is_map(Opts) -> start(maps:to_list(Opts));
 start(Opts) when is_list(Opts) ->
@@ -65,7 +73,7 @@ stop(Client) ->
     hackney_pool:stop_pool(Pool).
 
 list_ts_tables(Client) ->
-    ots_http:request(Client, ?LIST_TIMESERIES_TABLE, <<"">>).
+    ots_http:request(Client, ?LIST_TIMESERIES_TABLE, <<>>).
 
 %% -------------------------------------------------------------------------------------------------
 %% internal
