@@ -1,0 +1,37 @@
+
+message TimeseriesKey {
+    required string measurement = 1;
+    required string data_source = 2;
+    required string tags = 3;
+  }
+  
+  message TimeseriesField {
+    optional string field_name = 1;
+    optional int64 value_int = 2;
+    optional string value_string = 3;
+    optional bool value_bool = 4;
+    optional double value_double = 5;
+    optional bytes value_binary = 6;
+  }
+  message TimeseriesRow {
+    optional TimeseriesKey timeseries_key = 1;
+    optional int64 time = 2;
+    repeated TimeseriesField fields = 3;
+    optional uint32 meta_cache_update_time = 4;
+  }
+  
+  message TimeseriesPBRows {
+    repeated TimeseriesRow rows = 1;
+  }
+  
+  enum RowsSerializeType {
+    RST_FLAT_BUFFER = 0;
+    RST_PLAIN_BUFFER = 1;
+    RST_PROTO_BUFFER = 2;
+  }
+  
+  message TimeseriesRows {
+    required RowsSerializeType type = 1; // 设置为 RST_PROTO_BUFFER
+    required bytes rows_data = 2; // 设置为 TimeseriesPBRows 的序列化结果
+    optional int32 flatbuffer_crc32c = 3; // 不用设置
+  }
