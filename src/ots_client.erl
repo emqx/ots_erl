@@ -52,7 +52,6 @@ list_ts_tables(Client) ->
     request(Client, ?FUNCTION_NAME, <<>>).
 
 write(Client, Data) ->
-    io:format("Encode ~p~n", [encode(Data)]),
     request(Client, ?FUNCTION_NAME, encode(Data)).
 
 %% -------------------------------------------------------------------------------------------------
@@ -151,16 +150,17 @@ to_timeseries_key(Measurement, DataSource, Tags) ->
 encode_tags(Tags) when is_map(Tags) ->
     encode_tags(maps:to_list(Tags));
 encode_tags(Tags) ->
-    encode_tags(Tags, []).
+    %% Tags must be sorted
+    %% And as like ["a=tag1","b=tag2"]
+    SortTags = lists:sort([{to_binary(K), to_binary(V)} || {K, V} <- Tags]),
+    encode_tags(SortTags, []).
 
 encode_tags([], Res) ->
-    NRes = list_to_binary([<<"[">>, lists:reverse(Res), <<"]">>]),
-    io:format("REs N ~p~n", [NRes]),
-    NRes;
+    list_to_binary([<<"[">>, lists:reverse(Res), <<"]">>]);
 encode_tags([{Key, Value}], Res) ->
-    encode_tags([], [[<<"\"">>, to_binary(Key), <<"=">>, to_binary(Value), <<"\"">>] | Res]);
+    encode_tags([], [[<<"\"">>, Key, <<"=">>, Value, <<"\"">>] | Res]);
 encode_tags([{Key, Value} | Tags], Res) ->
-    encode_tags(Tags, [[<<"\"">>, to_binary(Key), <<"=">>, to_binary(Value), <<"\",">>] | Res]).
+    encode_tags(Tags, [[<<"\"">>, Key, <<"=">>, Value, <<"\",">>] | Res]).
 
 to_fields(Fields) when is_map(Fields) ->
     to_fields(maps:to_list(Fields));

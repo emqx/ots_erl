@@ -38,8 +38,12 @@ request(Client, Action, Body) ->
             orelse StatusCode =:= 204 ->
             {ok, ResponseBody};
         {ok, StatusCode, RespHeaders, ResponseBody} ->
-            io:format("Headers ~p~n", [RespHeaders]),
-            {error, {StatusCode, ResponseBody}};
+            Reason = #{
+                code => StatusCode,
+                request_id => proplist:get_value(<<"x-ots-requestid">>, RespHeaders),
+                message => ResponseBody
+            },
+            {error, Reason};
         {error, Reason} ->
             {error, Reason}
     end.
