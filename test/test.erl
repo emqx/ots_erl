@@ -58,7 +58,7 @@ test() ->
         {endpoint, <<"https://emqx-test.cn-hangzhou.ots.aliyuncs.com">>},
         {instance, <<"emqx-test">>},
         {access_key, <<"LTAI5tETEEvA4D7ctpSYvmEg">>},
-        {access_secret, <<"6rEq8kuTlLAaTPlEG86V7ip6YjELBQ">>},
+        {access_secret, <<"">>},
         {pool_size, 1}
     ],
     {ok, Client} = start(Opts),
