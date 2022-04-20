@@ -20,6 +20,7 @@
 
 -export([ start/1
         , list_ts_tables/1
+        , write/2
         , stop/1
         ]).
 
@@ -31,31 +32,6 @@
         , access_secret/1
         ]).
 
--export([test/0]).
-
-test() ->
-    %% remove this fun after released
-    % ots_client:test().
-    Opts = [
-        {pool, test_demo_pool},
-        {endpoint, <<"https://emqx-demo.cn-hangzhou.ots.aliyuncs.com">>},
-        {instance, <<"emqx-demo">>},
-        {access_key, <<"LTAI5tETEEvA4D7ctpSYvmEg">>},
-        {access_secret, <<"not pwd in github">>},
-        {pool_size, 1}
-    ],
-    {ok, Client} = start(Opts),
-    case list_ts_tables(Client) of
-        {error, {Code, Resp}} ->
-            io:format("Res ~p ~s ~n", [Code, to_str(Resp)]);
-        {ok, R} ->
-            io:format("~s~n", [to_str(R)])
-    end,
-    ok.
-
-to_str(B) when is_binary(B) -> binary_to_list(B);
-to_str(B) -> B.
-
 start(Opts) when is_map(Opts) -> start(maps:to_list(Opts));
 start(Opts) when is_list(Opts) ->
     Client = #ots_client{
@@ -66,19 +42,23 @@ start(Opts) when is_list(Opts) ->
         access_key    = proplists:get_value(access_key, Opts),
         access_secret = proplists:get_value(access_secret, Opts)
     },
-    start_client(Client, Opts).
+    do_start(Client, Opts).
 
 stop(Client) ->
     Pool = pool(Client),
     hackney_pool:stop_pool(Pool).
 
 list_ts_tables(Client) ->
-    ots_http:request(Client, ?LIST_TIMESERIES_TABLE, <<>>).
+    request(Client, ?FUNCTION_NAME, <<>>).
+
+write(Client, Data) ->
+    io:format("Encode ~p~n", [encode(Data)]),
+    request(Client, ?FUNCTION_NAME, encode(Data)).
 
 %% -------------------------------------------------------------------------------------------------
 %% internal
 
-start_client(Client, Opts) ->
+do_start(Client, Opts) ->
     Pool = pool(Client),
     PoolSize = proplists:get_value(pool_size, Opts, 8),
     PoolOptions = [
@@ -93,6 +73,22 @@ start_client(Client, Opts) ->
             Error
     end.
 
+request(Client, Req, Data) ->
+    ots_http:request(Client, endpoint(Req, Client), Data).
+
+endpoint(Type, Client) ->
+    case type(Client) of
+        ?OTS_CLIENT_TS ->
+            ts_endpoint(Type);
+        ?OTS_CLIENT_WC ->
+            %% TODO: wide column support
+            {error, not_support}
+    end.
+
+ts_endpoint(list_ts_tables) -> ?LIST_TIMESERIES_TABLE;
+ts_endpoint(write) -> ?PUT_TIMESERIES_DATA;
+ts_endpoint(_) -> {error, not_support}.
+
 %% -------------------------------------------------------------------------------------------------
 %% app internal
 
@@ -102,3 +98,93 @@ endpoint(#ots_client{endpoint = E}) -> E.
 instance(#ots_client{instance = I}) -> I.
 access_key(#ots_client{access_key = K}) -> K.
 access_secret(#ots_client{access_secret = S}) -> S.
+
+%% -------------------------------------------------------------------------------------------------
+%% ts data transform
+encode(Rows) ->
+    ots_sql:encode_msg(to_ots_data(Rows)).
+
+to_ots_data(Rows) when is_list(Rows) ->
+    #'TimeseriesRows'{
+        type = 'RST_PROTO_BUFFER',
+        rows_data = encode_pb_rows(Rows),
+        flatbuffer_crc32c = undefined
+    }.
+
+encode_pb_rows(Rows) ->
+    TimeseriesPBRows = #'TimeseriesPBRows'{
+        rows = [to_row(Row) || Row <- Rows]
+    },
+    ots_sql:encode_msg(TimeseriesPBRows).
+
+to_row(Row) ->
+    Measurement = maps:get(measurement, Row),
+    DataSource = maps:get(data_source, Row),
+    Tags = maps:get(tags, Row, []),
+    #'TimeseriesRow'{
+        timeseries_key = to_timeseries_key(Measurement, DataSource, Tags),
+        time = row_time(Row),
+        fields = to_fields(maps:get(fields, Row, [])),
+        %% TODO: meta_cache_update_time
+        meta_cache_update_time = undefined
+    }.
+
+row_time(#{time := Time}) -> Time;
+row_time(_Row) -> erlang:system_time(millisecond).
+
+to_timeseries_key(Measurement, DataSource, Tags) ->
+    #'TimeseriesKey'{
+        measurement = Measurement,
+        data_source = DataSource,
+        tags = encode_tags(Tags)
+    }.
+
+encode_tags(Tags) when is_map(Tags) ->
+    encode_tags(maps:to_list(Tags));
+encode_tags(Tags) ->
+    encode_tags(Tags, []).
+
+encode_tags([], Res) ->
+    list_to_binary(lists:reverse(Res));
+encode_tags([{Key, Value}], Res) ->
+    encode_tags([], [[to_binary(Key), <<"=">>, to_binary(Value)] | Res]);
+encode_tags([{Key, Value} | Tags], Res) ->
+    encode_tags(Tags, [[to_binary(Key), <<"=">>, to_binary(Value), <<",">>] | Res]).
+
+to_fields(Fields) when is_map(Fields) ->
+    to_fields(maps:to_list(Fields));
+to_fields(Fields) ->
+    [to_field(Field) || Field <- Fields].
+
+%% ensure binary key
+to_field({Key, Value}) ->
+    to_field(to_binary(Key), Value).
+
+to_field(Key, Value) when is_integer(Value) ->
+    #'TimeseriesField'{field_name = Key, value_int = Value};
+to_field(Key, Value) when is_float(Value) ->
+    #'TimeseriesField'{field_name = Key, value_double = Value};
+to_field(Key, Value) when is_boolean(Value) ->
+    #'TimeseriesField'{field_name = Key, value_bool = Value};
+to_field(Key, Value) when is_atom(Value) ->
+    #'TimeseriesField'{field_name = Key, value_string = atom_to_list(Value)};
+to_field(Key, Value) when is_list(Value) ->
+    #'TimeseriesField'{field_name = Key, value_string = Value};
+to_field(Key, Value) when is_binary(Value) ->
+    #'TimeseriesField'{field_name = Key, value_binary = Value};
+to_field(Key, _Value) ->
+    #'TimeseriesField'{field_name = Key}.
+
+to_binary(Bin)  when is_binary(Bin) -> Bin;
+to_binary(Num)  when is_number(Num) -> number_to_binary(Num);
+to_binary(Atom) when is_atom(Atom)  -> atom_to_binary(Atom, utf8);
+to_binary(List) when is_list(List)  ->
+    case io_lib:printable_list(List) of
+        true -> list_to_binary(List);
+        false -> emqx_json:encode(List)
+    end.
+
+number_to_binary(Int) when is_integer(Int) ->
+    integer_to_binary(Int);
+number_to_binary(Float) when is_float(Float) ->
+    float_to_binary(Float, [{decimals, 10}, compact]).

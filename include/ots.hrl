@@ -107,9 +107,9 @@
 -ifndef('TIMESERIESROW_PB_H').
 -define('TIMESERIESROW_PB_H', true).
 -record('TimeseriesRow',
-        {timeseries_key         :: ots:'TimeseriesKey'() | undefined, % = 1, optional
+        {timeseries_key         :: ots_sql:'TimeseriesKey'() | undefined, % = 1, optional
          time                   :: integer() | undefined, % = 2, optional, 64 bits
-         fields = []            :: [ots:'TimeseriesField'()] | undefined, % = 3, repeated
+         fields = []            :: [ots_sql:'TimeseriesField'()] | undefined, % = 3, repeated
          meta_cache_update_time :: non_neg_integer() | undefined % = 4, optional, 32 bits
         }).
 -endif.
@@ -117,7 +117,7 @@
 -ifndef('TIMESERIESPBROWS_PB_H').
 -define('TIMESERIESPBROWS_PB_H', true).
 -record('TimeseriesPBRows',
-        {rows = []              :: [ots:'TimeseriesRow'()] | undefined % = 1, repeated
+        {rows = []              :: [ots_sql:'TimeseriesRow'()] | undefined % = 1, repeated
         }).
 -endif.
 

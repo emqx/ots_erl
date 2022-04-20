@@ -37,7 +37,8 @@ request(Client, Action, Body) ->
             when StatusCode =:= 200
             orelse StatusCode =:= 204 ->
             {ok, ResponseBody};
-        {ok, StatusCode, _Headers, ResponseBody} ->
+        {ok, StatusCode, RespHeaders, ResponseBody} ->
+            io:format("Headers ~p~n", [RespHeaders]),
             {error, {StatusCode, ResponseBody}};
         {error, Reason} ->
             {error, Reason}
