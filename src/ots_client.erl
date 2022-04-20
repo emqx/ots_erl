@@ -101,14 +101,23 @@ access_secret(#ots_client{access_secret = S}) -> S.
 
 %% -------------------------------------------------------------------------------------------------
 %% ts data transform
-encode(Rows) ->
-    ots_sql:encode_msg(to_ots_data(Rows)).
+encode(Data) ->
+    ots_sql:encode_msg(to_ots_data(Data)).
 
-to_ots_data(Rows) when is_list(Rows) ->
-    #'TimeseriesRows'{
-        type = 'RST_PROTO_BUFFER',
-        rows_data = encode_pb_rows(Rows),
-        flatbuffer_crc32c = undefined
+to_ots_data(Data) ->
+    TableName = maps:get(table_name, Data),
+    MetaUpdateMode = maps:get(meta_update_mode, Data, 'MUM_IGNORE'),
+    Rows = maps:get(rows_data, Data, []),
+    RowsData =
+        #'TimeseriesRows'{
+            type = 'RST_PROTO_BUFFER',
+            rows_data = encode_pb_rows(Rows),
+            flatbuffer_crc32c = 0
+        },
+    #'PutTimeseriesDataRequest'{
+        table_name = TableName,
+        rows_data = RowsData,
+        meta_update_mode = MetaUpdateMode
     }.
 
 encode_pb_rows(Rows) ->
@@ -130,7 +139,7 @@ to_row(Row) ->
     }.
 
 row_time(#{time := Time}) -> Time;
-row_time(_Row) -> erlang:system_time(millisecond).
+row_time(_Row) -> erlang:system_time(microsecond).
 
 to_timeseries_key(Measurement, DataSource, Tags) ->
     #'TimeseriesKey'{
@@ -145,11 +154,13 @@ encode_tags(Tags) ->
     encode_tags(Tags, []).
 
 encode_tags([], Res) ->
-    list_to_binary(lists:reverse(Res));
+    NRes = list_to_binary([<<"[">>, lists:reverse(Res), <<"]">>]),
+    io:format("REs N ~p~n", [NRes]),
+    NRes;
 encode_tags([{Key, Value}], Res) ->
-    encode_tags([], [[to_binary(Key), <<"=">>, to_binary(Value)] | Res]);
+    encode_tags([], [[<<"\"">>, to_binary(Key), <<"=">>, to_binary(Value), <<"\"">>] | Res]);
 encode_tags([{Key, Value} | Tags], Res) ->
-    encode_tags(Tags, [[to_binary(Key), <<"=">>, to_binary(Value), <<",">>] | Res]).
+    encode_tags(Tags, [[<<"\"">>, to_binary(Key), <<"=">>, to_binary(Value), <<"\",">>] | Res]).
 
 to_fields(Fields) when is_map(Fields) ->
     to_fields(maps:to_list(Fields));

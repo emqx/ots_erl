@@ -33,6 +33,7 @@
 -export([find_enum_def/1, fetch_enum_def/1]).
 -export([enum_symbol_by_value/2, enum_value_by_symbol/2]).
 -export([enum_symbol_by_value_RowsSerializeType/1, enum_value_by_symbol_RowsSerializeType/1]).
+-export([enum_symbol_by_value_MetaUpdateMode/1, enum_value_by_symbol_MetaUpdateMode/1]).
 -export([get_service_names/0]).
 -export([get_service_def/1]).
 -export([get_rpc_names/1]).
@@ -67,7 +68,8 @@
 
 %% enumerated types
 -type 'RowsSerializeType'() :: 'RST_FLAT_BUFFER' | 'RST_PLAIN_BUFFER' | 'RST_PROTO_BUFFER'.
--export_type(['RowsSerializeType'/0]).
+-type 'MetaUpdateMode'() :: 'MUM_NORMAL' | 'MUM_IGNORE'.
+-export_type(['RowsSerializeType'/0, 'MetaUpdateMode'/0]).
 
 %% message types
 -type 'TimeseriesKey'() :: #'TimeseriesKey'{}.
@@ -80,9 +82,17 @@
 
 -type 'TimeseriesRows'() :: #'TimeseriesRows'{}.
 
--export_type(['TimeseriesKey'/0, 'TimeseriesField'/0, 'TimeseriesRow'/0, 'TimeseriesPBRows'/0, 'TimeseriesRows'/0]).
--type '$msg_name'() :: 'TimeseriesKey' | 'TimeseriesField' | 'TimeseriesRow' | 'TimeseriesPBRows' | 'TimeseriesRows'.
--type '$msg'() :: 'TimeseriesKey'() | 'TimeseriesField'() | 'TimeseriesRow'() | 'TimeseriesPBRows'() | 'TimeseriesRows'().
+-type 'PutTimeseriesDataRequest'() :: #'PutTimeseriesDataRequest'{}.
+
+-type 'FailedRowInfo'() :: #'FailedRowInfo'{}.
+
+-type 'MetaUpdateStatus'() :: #'MetaUpdateStatus'{}.
+
+-type 'PutTimeseriesDataResponse'() :: #'PutTimeseriesDataResponse'{}.
+
+-export_type(['TimeseriesKey'/0, 'TimeseriesField'/0, 'TimeseriesRow'/0, 'TimeseriesPBRows'/0, 'TimeseriesRows'/0, 'PutTimeseriesDataRequest'/0, 'FailedRowInfo'/0, 'MetaUpdateStatus'/0, 'PutTimeseriesDataResponse'/0]).
+-type '$msg_name'() :: 'TimeseriesKey' | 'TimeseriesField' | 'TimeseriesRow' | 'TimeseriesPBRows' | 'TimeseriesRows' | 'PutTimeseriesDataRequest' | 'FailedRowInfo' | 'MetaUpdateStatus' | 'PutTimeseriesDataResponse'.
+-type '$msg'() :: 'TimeseriesKey'() | 'TimeseriesField'() | 'TimeseriesRow'() | 'TimeseriesPBRows'() | 'TimeseriesRows'() | 'PutTimeseriesDataRequest'() | 'FailedRowInfo'() | 'MetaUpdateStatus'() | 'PutTimeseriesDataResponse'().
 -export_type(['$msg_name'/0, '$msg'/0]).
 
 -if(?OTP_RELEASE >= 24).
@@ -113,7 +123,11 @@ encode_msg(Msg, MsgName, Opts) ->
         'TimeseriesField' -> encode_msg_TimeseriesField(id(Msg, TrUserData), TrUserData);
         'TimeseriesRow' -> encode_msg_TimeseriesRow(id(Msg, TrUserData), TrUserData);
         'TimeseriesPBRows' -> encode_msg_TimeseriesPBRows(id(Msg, TrUserData), TrUserData);
-        'TimeseriesRows' -> encode_msg_TimeseriesRows(id(Msg, TrUserData), TrUserData)
+        'TimeseriesRows' -> encode_msg_TimeseriesRows(id(Msg, TrUserData), TrUserData);
+        'PutTimeseriesDataRequest' -> encode_msg_PutTimeseriesDataRequest(id(Msg, TrUserData), TrUserData);
+        'FailedRowInfo' -> encode_msg_FailedRowInfo(id(Msg, TrUserData), TrUserData);
+        'MetaUpdateStatus' -> encode_msg_MetaUpdateStatus(id(Msg, TrUserData), TrUserData);
+        'PutTimeseriesDataResponse' -> encode_msg_PutTimeseriesDataResponse(id(Msg, TrUserData), TrUserData)
     end.
 
 
@@ -189,6 +203,59 @@ encode_msg_TimeseriesRows(#'TimeseriesRows'{type = F1, rows_data = F2, flatbuffe
        true -> begin TrF3 = id(F3, TrUserData), e_type_int32(TrF3, <<B2/binary, 24>>, TrUserData) end
     end.
 
+encode_msg_PutTimeseriesDataRequest(Msg, TrUserData) -> encode_msg_PutTimeseriesDataRequest(Msg, <<>>, TrUserData).
+
+
+encode_msg_PutTimeseriesDataRequest(#'PutTimeseriesDataRequest'{table_name = F1, rows_data = F2, meta_update_mode = F3}, Bin, TrUserData) ->
+    B1 = begin TrF1 = id(F1, TrUserData), e_type_string(TrF1, <<Bin/binary, 10>>, TrUserData) end,
+    B2 = begin TrF2 = id(F2, TrUserData), e_mfield_PutTimeseriesDataRequest_rows_data(TrF2, <<B1/binary, 18>>, TrUserData) end,
+    if F3 == undefined -> B2;
+       true -> begin TrF3 = id(F3, TrUserData), e_enum_MetaUpdateMode(TrF3, <<B2/binary, 24>>, TrUserData) end
+    end.
+
+encode_msg_FailedRowInfo(Msg, TrUserData) -> encode_msg_FailedRowInfo(Msg, <<>>, TrUserData).
+
+
+encode_msg_FailedRowInfo(#'FailedRowInfo'{row_index = F1, error_code = F2, error_message = F3}, Bin, TrUserData) ->
+    B1 = begin TrF1 = id(F1, TrUserData), e_type_int32(TrF1, <<Bin/binary, 8>>, TrUserData) end,
+    B2 = if F2 == undefined -> B1;
+            true -> begin TrF2 = id(F2, TrUserData), e_type_string(TrF2, <<B1/binary, 18>>, TrUserData) end
+         end,
+    if F3 == undefined -> B2;
+       true -> begin TrF3 = id(F3, TrUserData), e_type_string(TrF3, <<B2/binary, 26>>, TrUserData) end
+    end.
+
+encode_msg_MetaUpdateStatus(Msg, TrUserData) -> encode_msg_MetaUpdateStatus(Msg, <<>>, TrUserData).
+
+
+encode_msg_MetaUpdateStatus(#'MetaUpdateStatus'{row_ids = F1, meta_update_times = F2}, Bin, TrUserData) ->
+    B1 = begin
+             TrF1 = id(F1, TrUserData),
+             if TrF1 == [] -> Bin;
+                true -> e_field_MetaUpdateStatus_row_ids(TrF1, Bin, TrUserData)
+             end
+         end,
+    begin
+        TrF2 = id(F2, TrUserData),
+        if TrF2 == [] -> B1;
+           true -> e_field_MetaUpdateStatus_meta_update_times(TrF2, B1, TrUserData)
+        end
+    end.
+
+encode_msg_PutTimeseriesDataResponse(Msg, TrUserData) -> encode_msg_PutTimeseriesDataResponse(Msg, <<>>, TrUserData).
+
+
+encode_msg_PutTimeseriesDataResponse(#'PutTimeseriesDataResponse'{failed_rows = F1, meta_update_status = F2}, Bin, TrUserData) ->
+    B1 = begin
+             TrF1 = id(F1, TrUserData),
+             if TrF1 == [] -> Bin;
+                true -> e_field_PutTimeseriesDataResponse_failed_rows(TrF1, Bin, TrUserData)
+             end
+         end,
+    if F2 == undefined -> B1;
+       true -> begin TrF2 = id(F2, TrUserData), e_mfield_PutTimeseriesDataResponse_meta_update_status(TrF2, <<B1/binary, 18>>, TrUserData) end
+    end.
+
 e_mfield_TimeseriesRow_timeseries_key(Msg, Bin, TrUserData) ->
     SubBin = encode_msg_TimeseriesKey(Msg, <<>>, TrUserData),
     Bin2 = e_varint(byte_size(SubBin), Bin),
@@ -216,10 +283,47 @@ e_field_TimeseriesPBRows_rows([Elem | Rest], Bin, TrUserData) ->
     e_field_TimeseriesPBRows_rows(Rest, Bin3, TrUserData);
 e_field_TimeseriesPBRows_rows([], Bin, _TrUserData) -> Bin.
 
+e_mfield_PutTimeseriesDataRequest_rows_data(Msg, Bin, TrUserData) ->
+    SubBin = encode_msg_TimeseriesRows(Msg, <<>>, TrUserData),
+    Bin2 = e_varint(byte_size(SubBin), Bin),
+    <<Bin2/binary, SubBin/binary>>.
+
+e_field_MetaUpdateStatus_row_ids([Elem | Rest], Bin, TrUserData) ->
+    Bin2 = <<Bin/binary, 8>>,
+    Bin3 = e_varint(id(Elem, TrUserData), Bin2, TrUserData),
+    e_field_MetaUpdateStatus_row_ids(Rest, Bin3, TrUserData);
+e_field_MetaUpdateStatus_row_ids([], Bin, _TrUserData) -> Bin.
+
+e_field_MetaUpdateStatus_meta_update_times([Elem | Rest], Bin, TrUserData) ->
+    Bin2 = <<Bin/binary, 16>>,
+    Bin3 = e_varint(id(Elem, TrUserData), Bin2, TrUserData),
+    e_field_MetaUpdateStatus_meta_update_times(Rest, Bin3, TrUserData);
+e_field_MetaUpdateStatus_meta_update_times([], Bin, _TrUserData) -> Bin.
+
+e_mfield_PutTimeseriesDataResponse_failed_rows(Msg, Bin, TrUserData) ->
+    SubBin = encode_msg_FailedRowInfo(Msg, <<>>, TrUserData),
+    Bin2 = e_varint(byte_size(SubBin), Bin),
+    <<Bin2/binary, SubBin/binary>>.
+
+e_field_PutTimeseriesDataResponse_failed_rows([Elem | Rest], Bin, TrUserData) ->
+    Bin2 = <<Bin/binary, 10>>,
+    Bin3 = e_mfield_PutTimeseriesDataResponse_failed_rows(id(Elem, TrUserData), Bin2, TrUserData),
+    e_field_PutTimeseriesDataResponse_failed_rows(Rest, Bin3, TrUserData);
+e_field_PutTimeseriesDataResponse_failed_rows([], Bin, _TrUserData) -> Bin.
+
+e_mfield_PutTimeseriesDataResponse_meta_update_status(Msg, Bin, TrUserData) ->
+    SubBin = encode_msg_MetaUpdateStatus(Msg, <<>>, TrUserData),
+    Bin2 = e_varint(byte_size(SubBin), Bin),
+    <<Bin2/binary, SubBin/binary>>.
+
 e_enum_RowsSerializeType('RST_FLAT_BUFFER', Bin, _TrUserData) -> <<Bin/binary, 0>>;
 e_enum_RowsSerializeType('RST_PLAIN_BUFFER', Bin, _TrUserData) -> <<Bin/binary, 1>>;
 e_enum_RowsSerializeType('RST_PROTO_BUFFER', Bin, _TrUserData) -> <<Bin/binary, 2>>;
 e_enum_RowsSerializeType(V, Bin, _TrUserData) -> e_varint(V, Bin).
+
+e_enum_MetaUpdateMode('MUM_NORMAL', Bin, _TrUserData) -> <<Bin/binary, 0>>;
+e_enum_MetaUpdateMode('MUM_IGNORE', Bin, _TrUserData) -> <<Bin/binary, 1>>;
+e_enum_MetaUpdateMode(V, Bin, _TrUserData) -> e_varint(V, Bin).
 
 -compile({nowarn_unused_function,e_type_sint/3}).
 e_type_sint(Value, Bin, _TrUserData) when Value >= 0 -> e_varint(Value * 2, Bin);
@@ -347,7 +451,11 @@ decode_msg_2_doit('TimeseriesKey', Bin, TrUserData) -> id(decode_msg_TimeseriesK
 decode_msg_2_doit('TimeseriesField', Bin, TrUserData) -> id(decode_msg_TimeseriesField(Bin, TrUserData), TrUserData);
 decode_msg_2_doit('TimeseriesRow', Bin, TrUserData) -> id(decode_msg_TimeseriesRow(Bin, TrUserData), TrUserData);
 decode_msg_2_doit('TimeseriesPBRows', Bin, TrUserData) -> id(decode_msg_TimeseriesPBRows(Bin, TrUserData), TrUserData);
-decode_msg_2_doit('TimeseriesRows', Bin, TrUserData) -> id(decode_msg_TimeseriesRows(Bin, TrUserData), TrUserData).
+decode_msg_2_doit('TimeseriesRows', Bin, TrUserData) -> id(decode_msg_TimeseriesRows(Bin, TrUserData), TrUserData);
+decode_msg_2_doit('PutTimeseriesDataRequest', Bin, TrUserData) -> id(decode_msg_PutTimeseriesDataRequest(Bin, TrUserData), TrUserData);
+decode_msg_2_doit('FailedRowInfo', Bin, TrUserData) -> id(decode_msg_FailedRowInfo(Bin, TrUserData), TrUserData);
+decode_msg_2_doit('MetaUpdateStatus', Bin, TrUserData) -> id(decode_msg_MetaUpdateStatus(Bin, TrUserData), TrUserData);
+decode_msg_2_doit('PutTimeseriesDataResponse', Bin, TrUserData) -> id(decode_msg_PutTimeseriesDataResponse(Bin, TrUserData), TrUserData).
 
 
 
@@ -673,10 +781,279 @@ skip_32_TimeseriesRows(<<_:32, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUse
 
 skip_64_TimeseriesRows(<<_:64, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_TimeseriesRows(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
 
+decode_msg_PutTimeseriesDataRequest(Bin, TrUserData) -> dfp_read_field_def_PutTimeseriesDataRequest(Bin, 0, 0, 0, id(undefined, TrUserData), id(undefined, TrUserData), id(undefined, TrUserData), TrUserData).
+
+dfp_read_field_def_PutTimeseriesDataRequest(<<10, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_PutTimeseriesDataRequest_table_name(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_PutTimeseriesDataRequest(<<18, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_PutTimeseriesDataRequest_rows_data(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_PutTimeseriesDataRequest(<<24, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_PutTimeseriesDataRequest_meta_update_mode(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_PutTimeseriesDataRequest(<<>>, 0, 0, _, F@_1, F@_2, F@_3, _) -> #'PutTimeseriesDataRequest'{table_name = F@_1, rows_data = F@_2, meta_update_mode = F@_3};
+dfp_read_field_def_PutTimeseriesDataRequest(Other, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dg_read_field_def_PutTimeseriesDataRequest(Other, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+dg_read_field_def_PutTimeseriesDataRequest(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 32 - 7 -> dg_read_field_def_PutTimeseriesDataRequest(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+dg_read_field_def_PutTimeseriesDataRequest(<<0:1, X:7, Rest/binary>>, N, Acc, _, F@_1, F@_2, F@_3, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+        10 -> d_field_PutTimeseriesDataRequest_table_name(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        18 -> d_field_PutTimeseriesDataRequest_rows_data(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        24 -> d_field_PutTimeseriesDataRequest_meta_update_mode(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        _ ->
+            case Key band 7 of
+                0 -> skip_varint_PutTimeseriesDataRequest(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                1 -> skip_64_PutTimeseriesDataRequest(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                2 -> skip_length_delimited_PutTimeseriesDataRequest(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                3 -> skip_group_PutTimeseriesDataRequest(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                5 -> skip_32_PutTimeseriesDataRequest(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData)
+            end
+    end;
+dg_read_field_def_PutTimeseriesDataRequest(<<>>, 0, 0, _, F@_1, F@_2, F@_3, _) -> #'PutTimeseriesDataRequest'{table_name = F@_1, rows_data = F@_2, meta_update_mode = F@_3}.
+
+d_field_PutTimeseriesDataRequest_table_name(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_PutTimeseriesDataRequest_table_name(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_PutTimeseriesDataRequest_table_name(<<0:1, X:7, Rest/binary>>, N, Acc, F, _, F@_2, F@_3, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Utf8:Len/binary, Rest2/binary>> = Rest, {id(unicode:characters_to_list(Utf8, unicode), TrUserData), Rest2} end,
+    dfp_read_field_def_PutTimeseriesDataRequest(RestF, 0, 0, F, NewFValue, F@_2, F@_3, TrUserData).
+
+d_field_PutTimeseriesDataRequest_rows_data(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_PutTimeseriesDataRequest_rows_data(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_PutTimeseriesDataRequest_rows_data(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, Prev, F@_3, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Bs:Len/binary, Rest2/binary>> = Rest, {id(decode_msg_TimeseriesRows(Bs, TrUserData), TrUserData), Rest2} end,
+    dfp_read_field_def_PutTimeseriesDataRequest(RestF,
+                                                0,
+                                                0,
+                                                F,
+                                                F@_1,
+                                                if Prev == undefined -> NewFValue;
+                                                   true -> merge_msg_TimeseriesRows(Prev, NewFValue, TrUserData)
+                                                end,
+                                                F@_3,
+                                                TrUserData).
+
+d_field_PutTimeseriesDataRequest_meta_update_mode(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_PutTimeseriesDataRequest_meta_update_mode(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_PutTimeseriesDataRequest_meta_update_mode(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, _, TrUserData) ->
+    {NewFValue, RestF} = {id(d_enum_MetaUpdateMode(begin <<Res:32/signed-native>> = <<(X bsl N + Acc):32/unsigned-native>>, id(Res, TrUserData) end), TrUserData), Rest},
+    dfp_read_field_def_PutTimeseriesDataRequest(RestF, 0, 0, F, F@_1, F@_2, NewFValue, TrUserData).
+
+skip_varint_PutTimeseriesDataRequest(<<1:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> skip_varint_PutTimeseriesDataRequest(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+skip_varint_PutTimeseriesDataRequest(<<0:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_PutTimeseriesDataRequest(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_length_delimited_PutTimeseriesDataRequest(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> skip_length_delimited_PutTimeseriesDataRequest(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+skip_length_delimited_PutTimeseriesDataRequest(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_PutTimeseriesDataRequest(Rest2, 0, 0, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_group_PutTimeseriesDataRequest(Bin, _, Z2, FNum, F@_1, F@_2, F@_3, TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_PutTimeseriesDataRequest(Rest, 0, Z2, FNum, F@_1, F@_2, F@_3, TrUserData).
+
+skip_32_PutTimeseriesDataRequest(<<_:32, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_PutTimeseriesDataRequest(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_64_PutTimeseriesDataRequest(<<_:64, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_PutTimeseriesDataRequest(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+decode_msg_FailedRowInfo(Bin, TrUserData) -> dfp_read_field_def_FailedRowInfo(Bin, 0, 0, 0, id(undefined, TrUserData), id(undefined, TrUserData), id(undefined, TrUserData), TrUserData).
+
+dfp_read_field_def_FailedRowInfo(<<8, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_FailedRowInfo_row_index(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_FailedRowInfo(<<18, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_FailedRowInfo_error_code(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_FailedRowInfo(<<26, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> d_field_FailedRowInfo_error_message(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+dfp_read_field_def_FailedRowInfo(<<>>, 0, 0, _, F@_1, F@_2, F@_3, _) -> #'FailedRowInfo'{row_index = F@_1, error_code = F@_2, error_message = F@_3};
+dfp_read_field_def_FailedRowInfo(Other, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dg_read_field_def_FailedRowInfo(Other, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+dg_read_field_def_FailedRowInfo(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 32 - 7 -> dg_read_field_def_FailedRowInfo(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+dg_read_field_def_FailedRowInfo(<<0:1, X:7, Rest/binary>>, N, Acc, _, F@_1, F@_2, F@_3, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+        8 -> d_field_FailedRowInfo_row_index(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        18 -> d_field_FailedRowInfo_error_code(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        26 -> d_field_FailedRowInfo_error_message(Rest, 0, 0, 0, F@_1, F@_2, F@_3, TrUserData);
+        _ ->
+            case Key band 7 of
+                0 -> skip_varint_FailedRowInfo(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                1 -> skip_64_FailedRowInfo(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                2 -> skip_length_delimited_FailedRowInfo(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                3 -> skip_group_FailedRowInfo(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData);
+                5 -> skip_32_FailedRowInfo(Rest, 0, 0, Key bsr 3, F@_1, F@_2, F@_3, TrUserData)
+            end
+    end;
+dg_read_field_def_FailedRowInfo(<<>>, 0, 0, _, F@_1, F@_2, F@_3, _) -> #'FailedRowInfo'{row_index = F@_1, error_code = F@_2, error_message = F@_3}.
+
+d_field_FailedRowInfo_row_index(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_FailedRowInfo_row_index(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_FailedRowInfo_row_index(<<0:1, X:7, Rest/binary>>, N, Acc, F, _, F@_2, F@_3, TrUserData) ->
+    {NewFValue, RestF} = {begin <<Res:32/signed-native>> = <<(X bsl N + Acc):32/unsigned-native>>, id(Res, TrUserData) end, Rest},
+    dfp_read_field_def_FailedRowInfo(RestF, 0, 0, F, NewFValue, F@_2, F@_3, TrUserData).
+
+d_field_FailedRowInfo_error_code(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_FailedRowInfo_error_code(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_FailedRowInfo_error_code(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, _, F@_3, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Utf8:Len/binary, Rest2/binary>> = Rest, {id(unicode:characters_to_list(Utf8, unicode), TrUserData), Rest2} end,
+    dfp_read_field_def_FailedRowInfo(RestF, 0, 0, F, F@_1, NewFValue, F@_3, TrUserData).
+
+d_field_FailedRowInfo_error_message(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> d_field_FailedRowInfo_error_message(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+d_field_FailedRowInfo_error_message(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, _, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Utf8:Len/binary, Rest2/binary>> = Rest, {id(unicode:characters_to_list(Utf8, unicode), TrUserData), Rest2} end,
+    dfp_read_field_def_FailedRowInfo(RestF, 0, 0, F, F@_1, F@_2, NewFValue, TrUserData).
+
+skip_varint_FailedRowInfo(<<1:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> skip_varint_FailedRowInfo(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData);
+skip_varint_FailedRowInfo(<<0:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_FailedRowInfo(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_length_delimited_FailedRowInfo(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) when N < 57 -> skip_length_delimited_FailedRowInfo(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, F@_3, TrUserData);
+skip_length_delimited_FailedRowInfo(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, F@_3, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_FailedRowInfo(Rest2, 0, 0, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_group_FailedRowInfo(Bin, _, Z2, FNum, F@_1, F@_2, F@_3, TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_FailedRowInfo(Rest, 0, Z2, FNum, F@_1, F@_2, F@_3, TrUserData).
+
+skip_32_FailedRowInfo(<<_:32, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_FailedRowInfo(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+skip_64_FailedRowInfo(<<_:64, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData) -> dfp_read_field_def_FailedRowInfo(Rest, Z1, Z2, F, F@_1, F@_2, F@_3, TrUserData).
+
+decode_msg_MetaUpdateStatus(Bin, TrUserData) -> dfp_read_field_def_MetaUpdateStatus(Bin, 0, 0, 0, id([], TrUserData), id([], TrUserData), TrUserData).
+
+dfp_read_field_def_MetaUpdateStatus(<<10, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_pfield_MetaUpdateStatus_row_ids(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_MetaUpdateStatus(<<8, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_field_MetaUpdateStatus_row_ids(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_MetaUpdateStatus(<<18, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_pfield_MetaUpdateStatus_meta_update_times(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_MetaUpdateStatus(<<16, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_field_MetaUpdateStatus_meta_update_times(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_MetaUpdateStatus(<<>>, 0, 0, _, R1, R2, TrUserData) -> #'MetaUpdateStatus'{row_ids = lists_reverse(R1, TrUserData), meta_update_times = lists_reverse(R2, TrUserData)};
+dfp_read_field_def_MetaUpdateStatus(Other, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dg_read_field_def_MetaUpdateStatus(Other, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+dg_read_field_def_MetaUpdateStatus(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 32 - 7 -> dg_read_field_def_MetaUpdateStatus(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+dg_read_field_def_MetaUpdateStatus(<<0:1, X:7, Rest/binary>>, N, Acc, _, F@_1, F@_2, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+        10 -> d_pfield_MetaUpdateStatus_row_ids(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        8 -> d_field_MetaUpdateStatus_row_ids(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        18 -> d_pfield_MetaUpdateStatus_meta_update_times(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        16 -> d_field_MetaUpdateStatus_meta_update_times(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        _ ->
+            case Key band 7 of
+                0 -> skip_varint_MetaUpdateStatus(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                1 -> skip_64_MetaUpdateStatus(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                2 -> skip_length_delimited_MetaUpdateStatus(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                3 -> skip_group_MetaUpdateStatus(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                5 -> skip_32_MetaUpdateStatus(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData)
+            end
+    end;
+dg_read_field_def_MetaUpdateStatus(<<>>, 0, 0, _, R1, R2, TrUserData) -> #'MetaUpdateStatus'{row_ids = lists_reverse(R1, TrUserData), meta_update_times = lists_reverse(R2, TrUserData)}.
+
+d_field_MetaUpdateStatus_row_ids(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_field_MetaUpdateStatus_row_ids(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_field_MetaUpdateStatus_row_ids(<<0:1, X:7, Rest/binary>>, N, Acc, F, Prev, F@_2, TrUserData) ->
+    {NewFValue, RestF} = {id((X bsl N + Acc) band 4294967295, TrUserData), Rest},
+    dfp_read_field_def_MetaUpdateStatus(RestF, 0, 0, F, cons(NewFValue, Prev, TrUserData), F@_2, TrUserData).
+
+d_pfield_MetaUpdateStatus_row_ids(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_pfield_MetaUpdateStatus_row_ids(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_pfield_MetaUpdateStatus_row_ids(<<0:1, X:7, Rest/binary>>, N, Acc, F, E, F@_2, TrUserData) ->
+    Len = X bsl N + Acc,
+    <<PackedBytes:Len/binary, Rest2/binary>> = Rest,
+    NewSeq = d_packed_field_MetaUpdateStatus_row_ids(PackedBytes, 0, 0, F, E, TrUserData),
+    dfp_read_field_def_MetaUpdateStatus(Rest2, 0, 0, F, NewSeq, F@_2, TrUserData).
+
+d_packed_field_MetaUpdateStatus_row_ids(<<1:1, X:7, Rest/binary>>, N, Acc, F, AccSeq, TrUserData) when N < 57 -> d_packed_field_MetaUpdateStatus_row_ids(Rest, N + 7, X bsl N + Acc, F, AccSeq, TrUserData);
+d_packed_field_MetaUpdateStatus_row_ids(<<0:1, X:7, Rest/binary>>, N, Acc, F, AccSeq, TrUserData) ->
+    {NewFValue, RestF} = {id((X bsl N + Acc) band 4294967295, TrUserData), Rest},
+    d_packed_field_MetaUpdateStatus_row_ids(RestF, 0, 0, F, [NewFValue | AccSeq], TrUserData);
+d_packed_field_MetaUpdateStatus_row_ids(<<>>, 0, 0, _, AccSeq, _) -> AccSeq.
+
+d_field_MetaUpdateStatus_meta_update_times(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_field_MetaUpdateStatus_meta_update_times(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_field_MetaUpdateStatus_meta_update_times(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, Prev, TrUserData) ->
+    {NewFValue, RestF} = {id((X bsl N + Acc) band 4294967295, TrUserData), Rest},
+    dfp_read_field_def_MetaUpdateStatus(RestF, 0, 0, F, F@_1, cons(NewFValue, Prev, TrUserData), TrUserData).
+
+d_pfield_MetaUpdateStatus_meta_update_times(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_pfield_MetaUpdateStatus_meta_update_times(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_pfield_MetaUpdateStatus_meta_update_times(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, E, TrUserData) ->
+    Len = X bsl N + Acc,
+    <<PackedBytes:Len/binary, Rest2/binary>> = Rest,
+    NewSeq = d_packed_field_MetaUpdateStatus_meta_update_times(PackedBytes, 0, 0, F, E, TrUserData),
+    dfp_read_field_def_MetaUpdateStatus(Rest2, 0, 0, F, F@_1, NewSeq, TrUserData).
+
+d_packed_field_MetaUpdateStatus_meta_update_times(<<1:1, X:7, Rest/binary>>, N, Acc, F, AccSeq, TrUserData) when N < 57 -> d_packed_field_MetaUpdateStatus_meta_update_times(Rest, N + 7, X bsl N + Acc, F, AccSeq, TrUserData);
+d_packed_field_MetaUpdateStatus_meta_update_times(<<0:1, X:7, Rest/binary>>, N, Acc, F, AccSeq, TrUserData) ->
+    {NewFValue, RestF} = {id((X bsl N + Acc) band 4294967295, TrUserData), Rest},
+    d_packed_field_MetaUpdateStatus_meta_update_times(RestF, 0, 0, F, [NewFValue | AccSeq], TrUserData);
+d_packed_field_MetaUpdateStatus_meta_update_times(<<>>, 0, 0, _, AccSeq, _) -> AccSeq.
+
+skip_varint_MetaUpdateStatus(<<1:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> skip_varint_MetaUpdateStatus(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+skip_varint_MetaUpdateStatus(<<0:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_MetaUpdateStatus(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+skip_length_delimited_MetaUpdateStatus(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> skip_length_delimited_MetaUpdateStatus(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+skip_length_delimited_MetaUpdateStatus(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_MetaUpdateStatus(Rest2, 0, 0, F, F@_1, F@_2, TrUserData).
+
+skip_group_MetaUpdateStatus(Bin, _, Z2, FNum, F@_1, F@_2, TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_MetaUpdateStatus(Rest, 0, Z2, FNum, F@_1, F@_2, TrUserData).
+
+skip_32_MetaUpdateStatus(<<_:32, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_MetaUpdateStatus(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+skip_64_MetaUpdateStatus(<<_:64, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_MetaUpdateStatus(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+decode_msg_PutTimeseriesDataResponse(Bin, TrUserData) -> dfp_read_field_def_PutTimeseriesDataResponse(Bin, 0, 0, 0, id([], TrUserData), id(undefined, TrUserData), TrUserData).
+
+dfp_read_field_def_PutTimeseriesDataResponse(<<10, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_field_PutTimeseriesDataResponse_failed_rows(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_PutTimeseriesDataResponse(<<18, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> d_field_PutTimeseriesDataResponse_meta_update_status(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+dfp_read_field_def_PutTimeseriesDataResponse(<<>>, 0, 0, _, R1, F@_2, TrUserData) -> #'PutTimeseriesDataResponse'{failed_rows = lists_reverse(R1, TrUserData), meta_update_status = F@_2};
+dfp_read_field_def_PutTimeseriesDataResponse(Other, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dg_read_field_def_PutTimeseriesDataResponse(Other, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+dg_read_field_def_PutTimeseriesDataResponse(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 32 - 7 -> dg_read_field_def_PutTimeseriesDataResponse(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+dg_read_field_def_PutTimeseriesDataResponse(<<0:1, X:7, Rest/binary>>, N, Acc, _, F@_1, F@_2, TrUserData) ->
+    Key = X bsl N + Acc,
+    case Key of
+        10 -> d_field_PutTimeseriesDataResponse_failed_rows(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        18 -> d_field_PutTimeseriesDataResponse_meta_update_status(Rest, 0, 0, 0, F@_1, F@_2, TrUserData);
+        _ ->
+            case Key band 7 of
+                0 -> skip_varint_PutTimeseriesDataResponse(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                1 -> skip_64_PutTimeseriesDataResponse(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                2 -> skip_length_delimited_PutTimeseriesDataResponse(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                3 -> skip_group_PutTimeseriesDataResponse(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData);
+                5 -> skip_32_PutTimeseriesDataResponse(Rest, 0, 0, Key bsr 3, F@_1, F@_2, TrUserData)
+            end
+    end;
+dg_read_field_def_PutTimeseriesDataResponse(<<>>, 0, 0, _, R1, F@_2, TrUserData) -> #'PutTimeseriesDataResponse'{failed_rows = lists_reverse(R1, TrUserData), meta_update_status = F@_2}.
+
+d_field_PutTimeseriesDataResponse_failed_rows(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_field_PutTimeseriesDataResponse_failed_rows(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_field_PutTimeseriesDataResponse_failed_rows(<<0:1, X:7, Rest/binary>>, N, Acc, F, Prev, F@_2, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Bs:Len/binary, Rest2/binary>> = Rest, {id(decode_msg_FailedRowInfo(Bs, TrUserData), TrUserData), Rest2} end,
+    dfp_read_field_def_PutTimeseriesDataResponse(RestF, 0, 0, F, cons(NewFValue, Prev, TrUserData), F@_2, TrUserData).
+
+d_field_PutTimeseriesDataResponse_meta_update_status(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> d_field_PutTimeseriesDataResponse_meta_update_status(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+d_field_PutTimeseriesDataResponse_meta_update_status(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, Prev, TrUserData) ->
+    {NewFValue, RestF} = begin Len = X bsl N + Acc, <<Bs:Len/binary, Rest2/binary>> = Rest, {id(decode_msg_MetaUpdateStatus(Bs, TrUserData), TrUserData), Rest2} end,
+    dfp_read_field_def_PutTimeseriesDataResponse(RestF,
+                                                 0,
+                                                 0,
+                                                 F,
+                                                 F@_1,
+                                                 if Prev == undefined -> NewFValue;
+                                                    true -> merge_msg_MetaUpdateStatus(Prev, NewFValue, TrUserData)
+                                                 end,
+                                                 TrUserData).
+
+skip_varint_PutTimeseriesDataResponse(<<1:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> skip_varint_PutTimeseriesDataResponse(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData);
+skip_varint_PutTimeseriesDataResponse(<<0:1, _:7, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_PutTimeseriesDataResponse(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+skip_length_delimited_PutTimeseriesDataResponse(<<1:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) when N < 57 -> skip_length_delimited_PutTimeseriesDataResponse(Rest, N + 7, X bsl N + Acc, F, F@_1, F@_2, TrUserData);
+skip_length_delimited_PutTimeseriesDataResponse(<<0:1, X:7, Rest/binary>>, N, Acc, F, F@_1, F@_2, TrUserData) ->
+    Length = X bsl N + Acc,
+    <<_:Length/binary, Rest2/binary>> = Rest,
+    dfp_read_field_def_PutTimeseriesDataResponse(Rest2, 0, 0, F, F@_1, F@_2, TrUserData).
+
+skip_group_PutTimeseriesDataResponse(Bin, _, Z2, FNum, F@_1, F@_2, TrUserData) ->
+    {_, Rest} = read_group(Bin, FNum),
+    dfp_read_field_def_PutTimeseriesDataResponse(Rest, 0, Z2, FNum, F@_1, F@_2, TrUserData).
+
+skip_32_PutTimeseriesDataResponse(<<_:32, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_PutTimeseriesDataResponse(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
+skip_64_PutTimeseriesDataResponse(<<_:64, Rest/binary>>, Z1, Z2, F, F@_1, F@_2, TrUserData) -> dfp_read_field_def_PutTimeseriesDataResponse(Rest, Z1, Z2, F, F@_1, F@_2, TrUserData).
+
 d_enum_RowsSerializeType(0) -> 'RST_FLAT_BUFFER';
 d_enum_RowsSerializeType(1) -> 'RST_PLAIN_BUFFER';
 d_enum_RowsSerializeType(2) -> 'RST_PROTO_BUFFER';
 d_enum_RowsSerializeType(V) -> V.
+
+d_enum_MetaUpdateMode(0) -> 'MUM_NORMAL';
+d_enum_MetaUpdateMode(1) -> 'MUM_IGNORE';
+d_enum_MetaUpdateMode(V) -> V.
 
 read_group(Bin, FieldNum) ->
     {NumBytes, EndTagLen} = read_gr_b(Bin, 0, 0, 0, 0, FieldNum),
@@ -748,7 +1125,11 @@ merge_msgs(Prev, New, MsgName, Opts) ->
         'TimeseriesField' -> merge_msg_TimeseriesField(Prev, New, TrUserData);
         'TimeseriesRow' -> merge_msg_TimeseriesRow(Prev, New, TrUserData);
         'TimeseriesPBRows' -> merge_msg_TimeseriesPBRows(Prev, New, TrUserData);
-        'TimeseriesRows' -> merge_msg_TimeseriesRows(Prev, New, TrUserData)
+        'TimeseriesRows' -> merge_msg_TimeseriesRows(Prev, New, TrUserData);
+        'PutTimeseriesDataRequest' -> merge_msg_PutTimeseriesDataRequest(Prev, New, TrUserData);
+        'FailedRowInfo' -> merge_msg_FailedRowInfo(Prev, New, TrUserData);
+        'MetaUpdateStatus' -> merge_msg_MetaUpdateStatus(Prev, New, TrUserData);
+        'PutTimeseriesDataResponse' -> merge_msg_PutTimeseriesDataResponse(Prev, New, TrUserData)
     end.
 
 -compile({nowarn_unused_function,merge_msg_TimeseriesKey/3}).
@@ -820,6 +1201,54 @@ merge_msg_TimeseriesRows(#'TimeseriesRows'{flatbuffer_crc32c = PFflatbuffer_crc3
                              true -> NFflatbuffer_crc32c
                           end}.
 
+-compile({nowarn_unused_function,merge_msg_PutTimeseriesDataRequest/3}).
+merge_msg_PutTimeseriesDataRequest(#'PutTimeseriesDataRequest'{rows_data = PFrows_data, meta_update_mode = PFmeta_update_mode}, #'PutTimeseriesDataRequest'{table_name = NFtable_name, rows_data = NFrows_data, meta_update_mode = NFmeta_update_mode},
+                                   TrUserData) ->
+    #'PutTimeseriesDataRequest'{table_name = NFtable_name, rows_data = merge_msg_TimeseriesRows(PFrows_data, NFrows_data, TrUserData),
+                                meta_update_mode =
+                                    if NFmeta_update_mode =:= undefined -> PFmeta_update_mode;
+                                       true -> NFmeta_update_mode
+                                    end}.
+
+-compile({nowarn_unused_function,merge_msg_FailedRowInfo/3}).
+merge_msg_FailedRowInfo(#'FailedRowInfo'{error_code = PFerror_code, error_message = PFerror_message}, #'FailedRowInfo'{row_index = NFrow_index, error_code = NFerror_code, error_message = NFerror_message}, _) ->
+    #'FailedRowInfo'{row_index = NFrow_index,
+                     error_code =
+                         if NFerror_code =:= undefined -> PFerror_code;
+                            true -> NFerror_code
+                         end,
+                     error_message =
+                         if NFerror_message =:= undefined -> PFerror_message;
+                            true -> NFerror_message
+                         end}.
+
+-compile({nowarn_unused_function,merge_msg_MetaUpdateStatus/3}).
+merge_msg_MetaUpdateStatus(#'MetaUpdateStatus'{row_ids = PFrow_ids, meta_update_times = PFmeta_update_times}, #'MetaUpdateStatus'{row_ids = NFrow_ids, meta_update_times = NFmeta_update_times}, TrUserData) ->
+    #'MetaUpdateStatus'{row_ids =
+                            if PFrow_ids /= undefined, NFrow_ids /= undefined -> 'erlang_++'(PFrow_ids, NFrow_ids, TrUserData);
+                               PFrow_ids == undefined -> NFrow_ids;
+                               NFrow_ids == undefined -> PFrow_ids
+                            end,
+                        meta_update_times =
+                            if PFmeta_update_times /= undefined, NFmeta_update_times /= undefined -> 'erlang_++'(PFmeta_update_times, NFmeta_update_times, TrUserData);
+                               PFmeta_update_times == undefined -> NFmeta_update_times;
+                               NFmeta_update_times == undefined -> PFmeta_update_times
+                            end}.
+
+-compile({nowarn_unused_function,merge_msg_PutTimeseriesDataResponse/3}).
+merge_msg_PutTimeseriesDataResponse(#'PutTimeseriesDataResponse'{failed_rows = PFfailed_rows, meta_update_status = PFmeta_update_status}, #'PutTimeseriesDataResponse'{failed_rows = NFfailed_rows, meta_update_status = NFmeta_update_status},
+                                    TrUserData) ->
+    #'PutTimeseriesDataResponse'{failed_rows =
+                                     if PFfailed_rows /= undefined, NFfailed_rows /= undefined -> 'erlang_++'(PFfailed_rows, NFfailed_rows, TrUserData);
+                                        PFfailed_rows == undefined -> NFfailed_rows;
+                                        NFfailed_rows == undefined -> PFfailed_rows
+                                     end,
+                                 meta_update_status =
+                                     if PFmeta_update_status /= undefined, NFmeta_update_status /= undefined -> merge_msg_MetaUpdateStatus(PFmeta_update_status, NFmeta_update_status, TrUserData);
+                                        PFmeta_update_status == undefined -> NFmeta_update_status;
+                                        NFmeta_update_status == undefined -> PFmeta_update_status
+                                     end}.
+
 
 verify_msg(Msg) when tuple_size(Msg) >= 1 -> verify_msg(Msg, element(1, Msg), []);
 verify_msg(X) -> mk_type_error(not_a_known_message, X, []).
@@ -836,6 +1265,10 @@ verify_msg(Msg, MsgName, Opts) ->
         'TimeseriesRow' -> v_msg_TimeseriesRow(Msg, [MsgName], TrUserData);
         'TimeseriesPBRows' -> v_msg_TimeseriesPBRows(Msg, [MsgName], TrUserData);
         'TimeseriesRows' -> v_msg_TimeseriesRows(Msg, [MsgName], TrUserData);
+        'PutTimeseriesDataRequest' -> v_msg_PutTimeseriesDataRequest(Msg, [MsgName], TrUserData);
+        'FailedRowInfo' -> v_msg_FailedRowInfo(Msg, [MsgName], TrUserData);
+        'MetaUpdateStatus' -> v_msg_MetaUpdateStatus(Msg, [MsgName], TrUserData);
+        'PutTimeseriesDataResponse' -> v_msg_PutTimeseriesDataResponse(Msg, [MsgName], TrUserData);
         _ -> mk_type_error(not_a_known_message, Msg, [])
     end.
 
@@ -915,6 +1348,60 @@ v_msg_TimeseriesRows(#'TimeseriesRows'{type = F1, rows_data = F2, flatbuffer_crc
     ok;
 v_msg_TimeseriesRows(X, Path, _TrUserData) -> mk_type_error({expected_msg, 'TimeseriesRows'}, X, Path).
 
+-compile({nowarn_unused_function,v_msg_PutTimeseriesDataRequest/3}).
+-dialyzer({nowarn_function,v_msg_PutTimeseriesDataRequest/3}).
+v_msg_PutTimeseriesDataRequest(#'PutTimeseriesDataRequest'{table_name = F1, rows_data = F2, meta_update_mode = F3}, Path, TrUserData) ->
+    v_type_string(F1, [table_name | Path], TrUserData),
+    v_msg_TimeseriesRows(F2, [rows_data | Path], TrUserData),
+    if F3 == undefined -> ok;
+       true -> v_enum_MetaUpdateMode(F3, [meta_update_mode | Path], TrUserData)
+    end,
+    ok;
+v_msg_PutTimeseriesDataRequest(X, Path, _TrUserData) -> mk_type_error({expected_msg, 'PutTimeseriesDataRequest'}, X, Path).
+
+-compile({nowarn_unused_function,v_msg_FailedRowInfo/3}).
+-dialyzer({nowarn_function,v_msg_FailedRowInfo/3}).
+v_msg_FailedRowInfo(#'FailedRowInfo'{row_index = F1, error_code = F2, error_message = F3}, Path, TrUserData) ->
+    v_type_int32(F1, [row_index | Path], TrUserData),
+    if F2 == undefined -> ok;
+       true -> v_type_string(F2, [error_code | Path], TrUserData)
+    end,
+    if F3 == undefined -> ok;
+       true -> v_type_string(F3, [error_message | Path], TrUserData)
+    end,
+    ok;
+v_msg_FailedRowInfo(X, Path, _TrUserData) -> mk_type_error({expected_msg, 'FailedRowInfo'}, X, Path).
+
+-compile({nowarn_unused_function,v_msg_MetaUpdateStatus/3}).
+-dialyzer({nowarn_function,v_msg_MetaUpdateStatus/3}).
+v_msg_MetaUpdateStatus(#'MetaUpdateStatus'{row_ids = F1, meta_update_times = F2}, Path, TrUserData) ->
+    if is_list(F1) ->
+           _ = [v_type_uint32(Elem, [row_ids | Path], TrUserData) || Elem <- F1],
+           ok;
+       true -> mk_type_error({invalid_list_of, uint32}, F1, [row_ids | Path])
+    end,
+    if is_list(F2) ->
+           _ = [v_type_uint32(Elem, [meta_update_times | Path], TrUserData) || Elem <- F2],
+           ok;
+       true -> mk_type_error({invalid_list_of, uint32}, F2, [meta_update_times | Path])
+    end,
+    ok;
+v_msg_MetaUpdateStatus(X, Path, _TrUserData) -> mk_type_error({expected_msg, 'MetaUpdateStatus'}, X, Path).
+
+-compile({nowarn_unused_function,v_msg_PutTimeseriesDataResponse/3}).
+-dialyzer({nowarn_function,v_msg_PutTimeseriesDataResponse/3}).
+v_msg_PutTimeseriesDataResponse(#'PutTimeseriesDataResponse'{failed_rows = F1, meta_update_status = F2}, Path, TrUserData) ->
+    if is_list(F1) ->
+           _ = [v_msg_FailedRowInfo(Elem, [failed_rows | Path], TrUserData) || Elem <- F1],
+           ok;
+       true -> mk_type_error({invalid_list_of, {msg, 'FailedRowInfo'}}, F1, [failed_rows | Path])
+    end,
+    if F2 == undefined -> ok;
+       true -> v_msg_MetaUpdateStatus(F2, [meta_update_status | Path], TrUserData)
+    end,
+    ok;
+v_msg_PutTimeseriesDataResponse(X, Path, _TrUserData) -> mk_type_error({expected_msg, 'PutTimeseriesDataResponse'}, X, Path).
+
 -compile({nowarn_unused_function,v_enum_RowsSerializeType/3}).
 -dialyzer({nowarn_function,v_enum_RowsSerializeType/3}).
 v_enum_RowsSerializeType('RST_FLAT_BUFFER', _Path, _TrUserData) -> ok;
@@ -922,6 +1409,13 @@ v_enum_RowsSerializeType('RST_PLAIN_BUFFER', _Path, _TrUserData) -> ok;
 v_enum_RowsSerializeType('RST_PROTO_BUFFER', _Path, _TrUserData) -> ok;
 v_enum_RowsSerializeType(V, _Path, _TrUserData) when -2147483648 =< V, V =< 2147483647, is_integer(V) -> ok;
 v_enum_RowsSerializeType(X, Path, _TrUserData) -> mk_type_error({invalid_enum, 'RowsSerializeType'}, X, Path).
+
+-compile({nowarn_unused_function,v_enum_MetaUpdateMode/3}).
+-dialyzer({nowarn_function,v_enum_MetaUpdateMode/3}).
+v_enum_MetaUpdateMode('MUM_NORMAL', _Path, _TrUserData) -> ok;
+v_enum_MetaUpdateMode('MUM_IGNORE', _Path, _TrUserData) -> ok;
+v_enum_MetaUpdateMode(V, _Path, _TrUserData) when -2147483648 =< V, V =< 2147483647, is_integer(V) -> ok;
+v_enum_MetaUpdateMode(X, Path, _TrUserData) -> mk_type_error({invalid_enum, 'MetaUpdateMode'}, X, Path).
 
 -compile({nowarn_unused_function,v_type_int32/3}).
 -dialyzer({nowarn_function,v_type_int32/3}).
@@ -1014,6 +1508,7 @@ cons(Elem, Acc, _TrUserData) -> [Elem | Acc].
 
 get_msg_defs() ->
     [{{enum, 'RowsSerializeType'}, [{'RST_FLAT_BUFFER', 0}, {'RST_PLAIN_BUFFER', 1}, {'RST_PROTO_BUFFER', 2}]},
+     {{enum, 'MetaUpdateMode'}, [{'MUM_NORMAL', 0}, {'MUM_IGNORE', 1}]},
      {{msg, 'TimeseriesKey'},
       [#field{name = measurement, fnum = 1, rnum = 2, type = string, occurrence = required, opts = []},
        #field{name = data_source, fnum = 2, rnum = 3, type = string, occurrence = required, opts = []},
@@ -1034,19 +1529,30 @@ get_msg_defs() ->
      {{msg, 'TimeseriesRows'},
       [#field{name = type, fnum = 1, rnum = 2, type = {enum, 'RowsSerializeType'}, occurrence = required, opts = []},
        #field{name = rows_data, fnum = 2, rnum = 3, type = bytes, occurrence = required, opts = []},
-       #field{name = flatbuffer_crc32c, fnum = 3, rnum = 4, type = int32, occurrence = optional, opts = []}]}].
+       #field{name = flatbuffer_crc32c, fnum = 3, rnum = 4, type = int32, occurrence = optional, opts = []}]},
+     {{msg, 'PutTimeseriesDataRequest'},
+      [#field{name = table_name, fnum = 1, rnum = 2, type = string, occurrence = required, opts = []},
+       #field{name = rows_data, fnum = 2, rnum = 3, type = {msg, 'TimeseriesRows'}, occurrence = required, opts = []},
+       #field{name = meta_update_mode, fnum = 3, rnum = 4, type = {enum, 'MetaUpdateMode'}, occurrence = optional, opts = []}]},
+     {{msg, 'FailedRowInfo'},
+      [#field{name = row_index, fnum = 1, rnum = 2, type = int32, occurrence = required, opts = []},
+       #field{name = error_code, fnum = 2, rnum = 3, type = string, occurrence = optional, opts = []},
+       #field{name = error_message, fnum = 3, rnum = 4, type = string, occurrence = optional, opts = []}]},
+     {{msg, 'MetaUpdateStatus'}, [#field{name = row_ids, fnum = 1, rnum = 2, type = uint32, occurrence = repeated, opts = []}, #field{name = meta_update_times, fnum = 2, rnum = 3, type = uint32, occurrence = repeated, opts = []}]},
+     {{msg, 'PutTimeseriesDataResponse'},
+      [#field{name = failed_rows, fnum = 1, rnum = 2, type = {msg, 'FailedRowInfo'}, occurrence = repeated, opts = []}, #field{name = meta_update_status, fnum = 2, rnum = 3, type = {msg, 'MetaUpdateStatus'}, occurrence = optional, opts = []}]}].
 
 
-get_msg_names() -> ['TimeseriesKey', 'TimeseriesField', 'TimeseriesRow', 'TimeseriesPBRows', 'TimeseriesRows'].
+get_msg_names() -> ['TimeseriesKey', 'TimeseriesField', 'TimeseriesRow', 'TimeseriesPBRows', 'TimeseriesRows', 'PutTimeseriesDataRequest', 'FailedRowInfo', 'MetaUpdateStatus', 'PutTimeseriesDataResponse'].
 
 
 get_group_names() -> [].
 
 
-get_msg_or_group_names() -> ['TimeseriesKey', 'TimeseriesField', 'TimeseriesRow', 'TimeseriesPBRows', 'TimeseriesRows'].
+get_msg_or_group_names() -> ['TimeseriesKey', 'TimeseriesField', 'TimeseriesRow', 'TimeseriesPBRows', 'TimeseriesRows', 'PutTimeseriesDataRequest', 'FailedRowInfo', 'MetaUpdateStatus', 'PutTimeseriesDataResponse'].
 
 
-get_enum_names() -> ['RowsSerializeType'].
+get_enum_names() -> ['RowsSerializeType', 'MetaUpdateMode'].
 
 
 fetch_msg_def(MsgName) ->
@@ -1084,17 +1590,31 @@ find_msg_def('TimeseriesRows') ->
     [#field{name = type, fnum = 1, rnum = 2, type = {enum, 'RowsSerializeType'}, occurrence = required, opts = []},
      #field{name = rows_data, fnum = 2, rnum = 3, type = bytes, occurrence = required, opts = []},
      #field{name = flatbuffer_crc32c, fnum = 3, rnum = 4, type = int32, occurrence = optional, opts = []}];
+find_msg_def('PutTimeseriesDataRequest') ->
+    [#field{name = table_name, fnum = 1, rnum = 2, type = string, occurrence = required, opts = []},
+     #field{name = rows_data, fnum = 2, rnum = 3, type = {msg, 'TimeseriesRows'}, occurrence = required, opts = []},
+     #field{name = meta_update_mode, fnum = 3, rnum = 4, type = {enum, 'MetaUpdateMode'}, occurrence = optional, opts = []}];
+find_msg_def('FailedRowInfo') ->
+    [#field{name = row_index, fnum = 1, rnum = 2, type = int32, occurrence = required, opts = []},
+     #field{name = error_code, fnum = 2, rnum = 3, type = string, occurrence = optional, opts = []},
+     #field{name = error_message, fnum = 3, rnum = 4, type = string, occurrence = optional, opts = []}];
+find_msg_def('MetaUpdateStatus') -> [#field{name = row_ids, fnum = 1, rnum = 2, type = uint32, occurrence = repeated, opts = []}, #field{name = meta_update_times, fnum = 2, rnum = 3, type = uint32, occurrence = repeated, opts = []}];
+find_msg_def('PutTimeseriesDataResponse') ->
+    [#field{name = failed_rows, fnum = 1, rnum = 2, type = {msg, 'FailedRowInfo'}, occurrence = repeated, opts = []}, #field{name = meta_update_status, fnum = 2, rnum = 3, type = {msg, 'MetaUpdateStatus'}, occurrence = optional, opts = []}];
 find_msg_def(_) -> error.
 
 
 find_enum_def('RowsSerializeType') -> [{'RST_FLAT_BUFFER', 0}, {'RST_PLAIN_BUFFER', 1}, {'RST_PROTO_BUFFER', 2}];
+find_enum_def('MetaUpdateMode') -> [{'MUM_NORMAL', 0}, {'MUM_IGNORE', 1}];
 find_enum_def(_) -> error.
 
 
-enum_symbol_by_value('RowsSerializeType', Value) -> enum_symbol_by_value_RowsSerializeType(Value).
+enum_symbol_by_value('RowsSerializeType', Value) -> enum_symbol_by_value_RowsSerializeType(Value);
+enum_symbol_by_value('MetaUpdateMode', Value) -> enum_symbol_by_value_MetaUpdateMode(Value).
 
 
-enum_value_by_symbol('RowsSerializeType', Sym) -> enum_value_by_symbol_RowsSerializeType(Sym).
+enum_value_by_symbol('RowsSerializeType', Sym) -> enum_value_by_symbol_RowsSerializeType(Sym);
+enum_value_by_symbol('MetaUpdateMode', Sym) -> enum_value_by_symbol_MetaUpdateMode(Sym).
 
 
 enum_symbol_by_value_RowsSerializeType(0) -> 'RST_FLAT_BUFFER';
@@ -1105,6 +1625,13 @@ enum_symbol_by_value_RowsSerializeType(2) -> 'RST_PROTO_BUFFER'.
 enum_value_by_symbol_RowsSerializeType('RST_FLAT_BUFFER') -> 0;
 enum_value_by_symbol_RowsSerializeType('RST_PLAIN_BUFFER') -> 1;
 enum_value_by_symbol_RowsSerializeType('RST_PROTO_BUFFER') -> 2.
+
+enum_symbol_by_value_MetaUpdateMode(0) -> 'MUM_NORMAL';
+enum_symbol_by_value_MetaUpdateMode(1) -> 'MUM_IGNORE'.
+
+
+enum_value_by_symbol_MetaUpdateMode('MUM_NORMAL') -> 0;
+enum_value_by_symbol_MetaUpdateMode('MUM_IGNORE') -> 1.
 
 
 get_service_names() -> [].
@@ -1155,6 +1682,10 @@ fqbin_to_msg_name(<<"TimeseriesField">>) -> 'TimeseriesField';
 fqbin_to_msg_name(<<"TimeseriesRow">>) -> 'TimeseriesRow';
 fqbin_to_msg_name(<<"TimeseriesPBRows">>) -> 'TimeseriesPBRows';
 fqbin_to_msg_name(<<"TimeseriesRows">>) -> 'TimeseriesRows';
+fqbin_to_msg_name(<<"PutTimeseriesDataRequest">>) -> 'PutTimeseriesDataRequest';
+fqbin_to_msg_name(<<"FailedRowInfo">>) -> 'FailedRowInfo';
+fqbin_to_msg_name(<<"MetaUpdateStatus">>) -> 'MetaUpdateStatus';
+fqbin_to_msg_name(<<"PutTimeseriesDataResponse">>) -> 'PutTimeseriesDataResponse';
 fqbin_to_msg_name(E) -> error({gpb_error, {badmsg, E}}).
 
 
@@ -1163,14 +1694,20 @@ msg_name_to_fqbin('TimeseriesField') -> <<"TimeseriesField">>;
 msg_name_to_fqbin('TimeseriesRow') -> <<"TimeseriesRow">>;
 msg_name_to_fqbin('TimeseriesPBRows') -> <<"TimeseriesPBRows">>;
 msg_name_to_fqbin('TimeseriesRows') -> <<"TimeseriesRows">>;
+msg_name_to_fqbin('PutTimeseriesDataRequest') -> <<"PutTimeseriesDataRequest">>;
+msg_name_to_fqbin('FailedRowInfo') -> <<"FailedRowInfo">>;
+msg_name_to_fqbin('MetaUpdateStatus') -> <<"MetaUpdateStatus">>;
+msg_name_to_fqbin('PutTimeseriesDataResponse') -> <<"PutTimeseriesDataResponse">>;
 msg_name_to_fqbin(E) -> error({gpb_error, {badmsg, E}}).
 
 
 fqbin_to_enum_name(<<"RowsSerializeType">>) -> 'RowsSerializeType';
+fqbin_to_enum_name(<<"MetaUpdateMode">>) -> 'MetaUpdateMode';
 fqbin_to_enum_name(E) -> error({gpb_error, {badenum, E}}).
 
 
 enum_name_to_fqbin('RowsSerializeType') -> <<"RowsSerializeType">>;
+enum_name_to_fqbin('MetaUpdateMode') -> <<"MetaUpdateMode">>;
 enum_name_to_fqbin(E) -> error({gpb_error, {badenum, E}}).
 
 
@@ -1182,7 +1719,7 @@ get_package_name() -> undefined.
 uses_packages() -> false.
 
 
-source_basename() -> "ots.proto".
+source_basename() -> "ots_sql.proto".
 
 
 %% Retrieve all proto file names, also imported ones.
@@ -1190,7 +1727,7 @@ source_basename() -> "ots.proto".
 %% source file. The files are returned with extension,
 %% see get_all_proto_names/0 for a version that returns
 %% the basenames sans extension
-get_all_source_basenames() -> ["ots.proto"].
+get_all_source_basenames() -> ["ots_sql.proto"].
 
 
 %% Retrieve all proto file names, also imported ones.
@@ -1198,34 +1735,38 @@ get_all_source_basenames() -> ["ots.proto"].
 %% source file. The files are returned sans .proto extension,
 %% to make it easier to use them with the various get_xyz_containment
 %% functions.
-get_all_proto_names() -> ["ots"].
+get_all_proto_names() -> ["ots_sql"].
 
 
-get_msg_containment("ots") -> ['TimeseriesField', 'TimeseriesKey', 'TimeseriesPBRows', 'TimeseriesRow', 'TimeseriesRows'];
+get_msg_containment("ots_sql") -> ['FailedRowInfo', 'MetaUpdateStatus', 'PutTimeseriesDataRequest', 'PutTimeseriesDataResponse', 'TimeseriesField', 'TimeseriesKey', 'TimeseriesPBRows', 'TimeseriesRow', 'TimeseriesRows'];
 get_msg_containment(P) -> error({gpb_error, {badproto, P}}).
 
 
-get_pkg_containment("ots") -> undefined;
+get_pkg_containment("ots_sql") -> undefined;
 get_pkg_containment(P) -> error({gpb_error, {badproto, P}}).
 
 
-get_service_containment("ots") -> [];
+get_service_containment("ots_sql") -> [];
 get_service_containment(P) -> error({gpb_error, {badproto, P}}).
 
 
-get_rpc_containment("ots") -> [];
+get_rpc_containment("ots_sql") -> [];
 get_rpc_containment(P) -> error({gpb_error, {badproto, P}}).
 
 
-get_enum_containment("ots") -> ['RowsSerializeType'];
+get_enum_containment("ots_sql") -> ['MetaUpdateMode', 'RowsSerializeType'];
 get_enum_containment(P) -> error({gpb_error, {badproto, P}}).
 
 
-get_proto_by_msg_name_as_fqbin(<<"TimeseriesRows">>) -> "ots";
-get_proto_by_msg_name_as_fqbin(<<"TimeseriesPBRows">>) -> "ots";
-get_proto_by_msg_name_as_fqbin(<<"TimeseriesField">>) -> "ots";
-get_proto_by_msg_name_as_fqbin(<<"TimeseriesRow">>) -> "ots";
-get_proto_by_msg_name_as_fqbin(<<"TimeseriesKey">>) -> "ots";
+get_proto_by_msg_name_as_fqbin(<<"TimeseriesRows">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"TimeseriesPBRows">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"MetaUpdateStatus">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"TimeseriesField">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"PutTimeseriesDataRequest">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"PutTimeseriesDataResponse">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"TimeseriesRow">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"TimeseriesKey">>) -> "ots_sql";
+get_proto_by_msg_name_as_fqbin(<<"FailedRowInfo">>) -> "ots_sql";
 get_proto_by_msg_name_as_fqbin(E) -> error({gpb_error, {badmsg, E}}).
 
 
@@ -1233,7 +1774,8 @@ get_proto_by_msg_name_as_fqbin(E) -> error({gpb_error, {badmsg, E}}).
 get_proto_by_service_name_as_fqbin(E) -> error({gpb_error, {badservice, E}}).
 
 
-get_proto_by_enum_name_as_fqbin(<<"RowsSerializeType">>) -> "ots";
+get_proto_by_enum_name_as_fqbin(<<"RowsSerializeType">>) -> "ots_sql";
+get_proto_by_enum_name_as_fqbin(<<"MetaUpdateMode">>) -> "ots_sql";
 get_proto_by_enum_name_as_fqbin(E) -> error({gpb_error, {badenum, E}}).
 
 

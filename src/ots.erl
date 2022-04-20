@@ -66,12 +66,12 @@ test() ->
     Fields4 = #{},
 
     Tags1 = [
-        {"t_int", 1},
-        {<<"t_double">>, 1.1},
-        {t_boolean, true},
-        {t_string, "string1"},
-        {t_binary1, <<"binary1">>},
-        {t_a_string, atom1}
+        % {"t_int", 1},
+        % {<<"t_double">>, 1.1},
+        % {t_boolean, true},
+        {t_a_string, atom1},
+        {"t_string", "string1"}
+        % {t_binary1, <<"binary1">>},
     ],
 
     Tags2 = #{
@@ -94,6 +94,10 @@ test() ->
         % #{measurement => <<"measurement4">>, data_source => <<"data_source4">>, fields => Fields4, tags => Tags4},
         % #{measurement => <<"measurement4_no_tag">>, data_source => <<"data_source4">>, fields => Fields4}
     ],
+    Data = #{
+        table_name => <<"flatbuffer_tab_test">>,
+        rows_data => Rows
+    },
     %% remove this fun after released
     % ots_client:test().
     Opts = [
@@ -108,11 +112,12 @@ test() ->
     {ok, Client} = start(Opts),
     List = ots_client:list_ts_tables(Client),
     IsAlive = is_alive(Client),
-    Write = write(Client, Rows),
+    Write = write(Client, Data),
     read_response("ListTable", List),
     read_response("IsAlive", IsAlive),
     read_response("Write", Write),
     ok.
+
 
 read_response(Title, {error, {Code, Message}}) ->
     io:format("~p ~p: ~s~n", [Title, Code, Message]);
