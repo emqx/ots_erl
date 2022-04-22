@@ -85,8 +85,7 @@ endpoint(Type, Client) ->
     end.
 
 ts_endpoint(list_ts_tables) -> ?LIST_TIMESERIES_TABLE;
-ts_endpoint(write) -> ?PUT_TIMESERIES_DATA;
-ts_endpoint(_) -> {error, not_support}.
+ts_endpoint(write) -> ?PUT_TIMESERIES_DATA.
 
 %% -------------------------------------------------------------------------------------------------
 %% app internal

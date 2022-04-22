@@ -40,7 +40,7 @@ request(Client, Action, Body) ->
         {ok, StatusCode, RespHeaders, ResponseBody} ->
             Reason = #{
                 code => StatusCode,
-                request_id => proplist:get_value(<<"x-ots-requestid">>, RespHeaders),
+                request_id => proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
                 message => ResponseBody
             },
             {error, Reason};

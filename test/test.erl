@@ -39,12 +39,13 @@ test() ->
         t_a_string => atom1
     },
 
-    Tags3 = [],
+    Tags3 = [{"t_int", 3}],
     Tags4 = #{},
 
     Rows = [
-        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags1}
-        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags2}
+        % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags1}
+        % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags2}
+        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags4}
     ],
     Data = #{
         table_name => <<"flatbuffer_tab_test">>,
@@ -61,10 +62,10 @@ test() ->
         {access_secret, <<"">>},
         {pool_size, 1}
     ],
-    {ok, Client} = start(Opts),
+    {ok, Client} = ots:start(Opts),
     List = ots_client:list_ts_tables(Client),
-    IsAlive = is_alive(Client),
-    Write = write(Client, Data),
+    IsAlive = ots:is_alive(Client),
+    Write = ots:write(Client, Data),
     read_response("ListTable", List),
     read_response("IsAlive", IsAlive),
     read_response("Write", Write),
