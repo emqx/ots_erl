@@ -126,7 +126,7 @@ encode_pb_rows(Rows) ->
 
 to_row(Row) ->
     Measurement = maps:get(measurement, Row),
-    DataSource = maps:get(data_source, Row),
+    DataSource = maps:get(data_source, Row, <<>>),
     Tags = maps:get(tags, Row, []),
     #'TimeseriesRow'{
         timeseries_key = to_timeseries_key(Measurement, DataSource, Tags),
