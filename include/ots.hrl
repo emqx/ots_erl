@@ -14,6 +14,8 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
+-define(OTS_CLIENT_VERSION, '1.0').
+
 -define(OTS_CLIENT_TS, time_series).
 -define(OTS_CLIENT_WC, wide_column).
 
