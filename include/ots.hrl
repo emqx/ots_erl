@@ -27,7 +27,9 @@
     endpoint            :: binary(),
     instance            :: binary(),
     access_key          :: binary(),
-    access_secret       :: binary()
+    access_secret       :: binary(),
+    version             = ?OTS_CLIENT_VERSION,
+    state               = undefined
 }).
 
 %% table end point

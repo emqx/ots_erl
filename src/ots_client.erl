@@ -40,9 +40,7 @@ start(Opts) when is_list(Opts) ->
         endpoint      = proplists:get_value(endpoint, Opts),
         instance      = proplists:get_value(instance, Opts),
         access_key    = proplists:get_value(access_key, Opts),
-        access_secret = proplists:get_value(access_secret, Opts),
-        version       = ?OTS_CLIENT_VERSION,
-        state         = undefined
+        access_secret = proplists:get_value(access_secret, Opts)
     },
     do_start(Client, Opts).
 
