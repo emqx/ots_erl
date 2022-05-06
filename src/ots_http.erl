@@ -33,14 +33,13 @@ request(Client, Action, Body) ->
     ],
     Url = list_to_binary([ots_client:endpoint(Client), Action]),
     case hackney:request(post, Url, Headers, Body, Options) of
-        {ok, StatusCode, _Headers, ResponseBody}
-            when StatusCode =:= 200
-            orelse StatusCode =:= 204 ->
-            {ok, ResponseBody};
+        {ok, 200, RespHeaders, ResponseBody} ->
+            ID = proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
+            {ok, ResponseBody, ID};
         {ok, StatusCode, RespHeaders, ResponseBody} ->
             Reason = #{
                 code => StatusCode,
-                request_id => proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
+                id => proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
                 message => ResponseBody
             },
             {error, Reason};

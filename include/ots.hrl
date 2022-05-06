@@ -21,13 +21,17 @@
 
 -type ots_client_type() :: ?OTS_CLIENT_TS | ?OTS_CLIENT_WC.
 
+-define(CLEAN_CACHE_INTERVAL, 10 *  60 * 1000).
+-define(CACHE_TIMEOUT, 10 *  60 * 1000).
+
 -record(ots_client, {
-    pool                :: term(),
+    pool                :: atom(),
     type = time_series  :: ots_client_type(),
     endpoint            :: binary(),
     instance            :: binary(),
     access_key          :: binary(),
     access_secret       :: binary(),
+    cache_table         :: atom(),
     version             = ?OTS_CLIENT_VERSION,
     state               = undefined
 }).
