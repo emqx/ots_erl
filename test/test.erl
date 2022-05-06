@@ -61,21 +61,29 @@ test() ->
         {instance, <<"emqx-test">>},
         {access_key, <<"LTAI5tETEEvA4D7ctpSYvmEg">>},
         {access_secret, <<"">>},
-        {pool_size, 1}
+        {pool_size, 1},
+        {clean_interval, 5000},
+        {cache_timeout, 200}
     ],
     {ok, Client} = ots:start(Opts),
     % List = ots_client:list_ts_tables(Client),
     % IsAlive = ots:is_alive(Client),
-    % Write = ots:write(Client, Data),
+    Caches1 = ets:tab2list(ots_cache_test_demo_pool),
+    read_response("Caches1", Caches1),
+    Write = ots:write(Client, Data),
+    CachesAfterW1 = ets:tab2list(ots_cache_test_demo_pool),
+    read_response("CachesAfterW1", CachesAfterW1),
     % read_response("ListTable", List),
     % read_response("IsAlive", IsAlive),
-    % read_response("Write", Write),
-    timer:sleep(2000),
+    read_response("Write", Write),
+    timer:sleep(5000),
+    Caches2 = ets:tab2list(ots_cache_test_demo_pool),
+    read_response("Caches2", Caches2),
     % Write2 = ots:write(Client, Data),
     % read_response("Write2", Write2),
     %% ets:tab2list(ots_cache_test_demo_pool).
-    Stop = ots:stop(Client),
-    read_response("Stop", Stop),
+    % Stop = ots:stop(Client),
+    % read_response("Stop", Stop),
     ok.
 
 
