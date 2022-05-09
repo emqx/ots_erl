@@ -312,6 +312,13 @@ put_req(Client, SQL, RetryState) ->
         },
         meta_update_mode = MetaUpdateMode
     },
+    Handler =
+        case MetaUpdateMode of
+            'MUM_IGNORE' ->
+                fun put_resp_ignore/1;
+            _ ->
+                fun put_resp/1
+        end,
     #ts_request{
         client      = Client,
         api         = ?PUT_TIMESERIES_DATA,
@@ -320,8 +327,16 @@ put_req(Client, SQL, RetryState) ->
         cache_keys  = CacheKeys,
         expect_resp = 'PutTimeseriesDataResponse',
         retry_state = RetryState,
-        response_handler = fun put_resp/1
+        response_handler = Handler
     }.
+
+put_resp_ignore(#ts_request{http_code = HCode, request_id = ID}) ->
+    case HCode of
+        200 ->
+            {ok, []};
+        _ ->
+            {error, #{http_code => HCode, request_id => ID}}
+    end.
 
 put_resp(Req = #ts_request{sql = SQL, response = Error}) when is_record(Error, 'ErrorResponse') ->
     RetryState = #{retry => maps:get(rows_data, SQL, [])},
