@@ -65,23 +65,25 @@ test() ->
         {clean_interval, 5000},
         {cache_timeout, 200}
     ],
-    {ok, Client} = ots:start(Opts),
+    {ok, Client} = ots_ts_client:start(Opts),
     % List = ots_client:list_ts_tables(Client),
     % IsAlive = ots:is_alive(Client),
-    Caches1 = ets:tab2list(ots_cache_test_demo_pool),
+    Caches1 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("Caches1", Caches1),
-    Write = ots:write(Client, Data),
-    CachesAfterW1 = ets:tab2list(ots_cache_test_demo_pool),
+    Write = ots_ts_client:put(Client, Data),
+    CachesAfterW1 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("CachesAfterW1", CachesAfterW1),
     % read_response("ListTable", List),
     % read_response("IsAlive", IsAlive),
     read_response("Write", Write),
-    timer:sleep(5000),
-    Caches2 = ets:tab2list(ots_cache_test_demo_pool),
+    timer:sleep(2000),
+    Caches2 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("Caches2", Caches2),
+    ListTables = ots_ts_client:list_tables(Client),
+    read_response("ListTables", ListTables),
     % Write2 = ots:write(Client, Data),
     % read_response("Write2", Write2),
-    %% ets:tab2list(ots_cache_test_demo_pool).
+    %% ets:tab2list(ts_cache_test_demo_pool).
     % Stop = ots:stop(Client),
     % read_response("Stop", Stop),
     ok.
@@ -91,7 +93,7 @@ read_response(Title, {error, {Code, Message}}) ->
     io:format("~p ~p: ~s~n", [Title, Code, Message]);
 
 read_response(Title, {ok, Message}) ->
-    io:format("~p : ~0p~n", [Title, Message]);
+    io:format("~p : ~p~n", [Title, Message]);
 
 read_response(Title, Message) ->
     io:format("~p : ~p~n", [Title, Message]).
