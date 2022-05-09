@@ -21,7 +21,7 @@
 
 -module(ots_ts_cache).
 
--include("ots.hrl").
+-include("ots_ts_sql.hrl").
 
 -behaviour(gen_server).
 
