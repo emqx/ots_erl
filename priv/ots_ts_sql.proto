@@ -227,3 +227,8 @@ message TimeseriesRow {
 message TimeseriesPBRows {
   repeated TimeseriesRow rows = 1;
 }
+
+message ErrorResponse {
+  required string code = 1;
+  optional string message = 2;
+}

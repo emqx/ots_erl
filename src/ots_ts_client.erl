@@ -101,7 +101,10 @@ transform_request(Type) ->
 
 %% -------------------------------------------------------------------------------------------------
 %% http request
-http_request(#ts_request{client = Client, payload = Payload, api = API}) ->
+http_request(#ts_request{client = Client,
+                         api = API,
+                         payload = Payload,
+                         expect_resp = ExpectRespType}) ->
     Headers = ts_headers(Client, API, Payload),
     Pool = pool(Client),
     Options = [
@@ -116,13 +119,38 @@ http_request(#ts_request{client = Client, payload = Payload, api = API}) ->
     case hackney:request(post, Url, Headers, Payload, Options) of
         {ok, 200, RespHeaders, ResponseBody} ->
             ID = proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
-            {ok, #{request_id => ID, body => ResponseBody}};
+            Response = decode_resp(ResponseBody, ExpectRespType),
+            {ok, #{
+                request_id => ID,
+                body => ResponseBody,
+                response => Response}
+            };
         {ok, StatusCode, RespHeaders, ResponseBody} ->
             ID = proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
-            {error, #{code => StatusCode, request_id => ID, body => ResponseBody}};
+            Response = decode_resp(ResponseBody, ExpectRespType),
+            {error, #{
+                code => StatusCode,
+                request_id => ID,
+                body => ResponseBody,
+                response => Response
+            }};
         {error, Reason} ->
             {error, Reason}
     end.
+
+decode_resp(_Body, undefined) -> undefined;
+decode_resp(Body, ResponseType) ->
+    try ots_ts_sql:decode_msg(Body, ResponseType)
+    catch _:_ ->
+        decode_error_resp(Body)
+    end.
+
+decode_error_resp(Body) ->
+    try ots_ts_sql:decode_msg(Body, 'ErrorResponse')
+    catch _:_ ->
+        unknow
+    end.
+
 
 ts_headers(Client, API, Body) ->
     %% Order by string name.
@@ -143,10 +171,7 @@ iso8601_now() ->
     iso8601:format({DatePart1, {H, M, S * 1.0}}).
 
 sign(API, AccessSecret, HeadersPart1) ->
-    StringToSign = [
-        API,
-        "\nPOST\n\n"
-    ],
+    StringToSign = [API, "\nPOST\n\n"],
     SignData = list_to_binary(
         [StringToSign | [[string:trim(H), ":", string:trim(V), "\n"] ||{H, V} <- HeadersPart1]]),
     base64:encode(crypto:mac(hmac, sha, AccessSecret, SignData)).
@@ -221,7 +246,7 @@ put_req(Client, SQL) ->
     MetaUpdateMode = maps:get(meta_update_mode, SQL, 'MUM_IGNORE'),
     Rows = rows_time(maps:get(rows_data, SQL, [])),
     {RowsBinaryData, CacheKeys} = encode_pb_rows(CacheTab, TableName, Rows, MetaUpdateMode),
-    Request = #'PutTimeseriesDataRequest'{
+    OTSRequest = #'PutTimeseriesDataRequest'{
         table_name = TableName,
         rows_data = #'TimeseriesRows'{
             type = 'RST_PROTO_BUFFER',
@@ -231,32 +256,35 @@ put_req(Client, SQL) ->
         meta_update_mode = MetaUpdateMode
     },
     #ts_request{
-        client     = Client,
-        api        = ?PUT_TIMESERIES_DATA,
-        sql        = SQL#{rows_data => Rows},
-        payload    = ots_ts_sql:encode_msg(Request),
-        cache_keys = CacheKeys
+        client      = Client,
+        api         = ?PUT_TIMESERIES_DATA,
+        sql         = SQL#{rows_data => Rows},
+        payload     = ots_ts_sql:encode_msg(OTSRequest),
+        cache_keys  = CacheKeys,
+        expect_resp = 'PutTimeseriesDataResponse'
     }.
 
 put_resp(Req = #ts_request{client = Client, cache_keys = CacheKeys},
-         _Resp = {ok, #{request_id := RequestID, body := Body}},
-         RetryLoop) ->
-    #'PutTimeseriesDataResponse'{
-        meta_update_status = #'MetaUpdateStatus'{
-            'row_ids' = IDs,
-            'meta_update_times' = Times
-        },
-        failed_rows = FailedRows
-    } = ots_ts_sql:decode_msg(Body, 'PutTimeseriesDataResponse'),
+        _Resp = {ok, #{
+             request_id := RequestID,
+             response := #'PutTimeseriesDataResponse'{
+                meta_update_status = #'MetaUpdateStatus'{
+                    'row_ids' = IDs,
+                    'meta_update_times' = Times},
+                failed_rows = FailedRows}}},
+        RetryLoop) ->
     CacheTab = cache_table(Client),
     ok = update_cache(CacheTab, CacheKeys, IDs, Times),
-    Return = #{response_id => RequestID},
     case FailedRows of
         [] ->
-            {ok, Return};
+            {ok, #{request_id => RequestID}};
         _ ->
-            retry_put(Req, FailedRows, Return, RetryLoop)
-    end.
+            retry_put(Req, FailedRows, RequestID, RetryLoop)
+    end;
+
+put_resp(Req = #ts_request{sql = SQL} , _Resp = {ok, #{response := #'ErrorResponse'{}}}, RetryLoop) ->
+    Rows = maps:get(rows_data, SQL, []),
+    {retry, Req, RetryLoop#{failed => Rows}}.
 
 update_cache(CacheTab, CacheKeys, IDs, Caches) ->
     case
@@ -292,25 +320,26 @@ update_caches(CacheKeys, [Index | IDs], [Cache | Caches], NewCaches) ->
 is_empty_list(List) when is_list(List) -> erlang:length(List) == 0;
 is_empty_list(_) -> true.
 
-retry_put(#ts_request{sql = SQL, client = Client}, FailedRows, Return, RetryLoop) ->
+retry_put(#ts_request{sql = SQL, client = Client}, FailedIndexList, RequestID, RetryLoop) ->
     Rows = maps:get(rows_data, SQL, []),
     LastFailed = maps:get(failed, RetryLoop, []),
-    case retry_aggregate(Rows, FailedRows, [], []) of
+    NextLoop = #{request_id => RequestID},
+    case retry_aggregate(Rows, FailedIndexList) of
         {error, R} ->
-            {error, R};
+            {error, NextLoop#{reason => R}};
         {[], Failed} ->
-            {error, Return#{failed => lists:append(Failed, LastFailed)}};
-        {RetryRow, []} ->
-            RetrySQL = SQL#{rows_data => RetryRow},
+            %% no more retry, all failed.
+            {error, NextLoop#{failed => lists:append(LastFailed, Failed)}};
+        {RetryRows, Failed} ->
+            %% retry some. and failed the no retry rows.
+            RetrySQL = SQL#{rows_data => RetryRows},
             RetryReq = put_req(Client, RetrySQL),
-            {retry, RetryReq, Return#{failed => LastFailed}};
-        {RetryRow, Failed} ->
-            RetrySQL = SQL#{rows_data => RetryRow},
-            RetryReq = put_req(Client, RetrySQL),
-            {retry, RetryReq, Return#{failed => lists:append(Failed, LastFailed)}}
+            {retry, RetryReq, NextLoop#{failed => lists:append(LastFailed, Failed)}}
     end.
 
-retry_aggregate(_Rows,[], Retry, Failed) ->
+retry_aggregate(Rows, FailedIndexList) ->
+    retry_aggregate(Rows, FailedIndexList, [], []).
+retry_aggregate(_Rows, [], Retry, Failed) ->
     {Retry, Failed};
 retry_aggregate(Rows,
           [#'FailedRowInfo'{row_index = Index, error_code = Code, error_message = Message} | FailedRows],

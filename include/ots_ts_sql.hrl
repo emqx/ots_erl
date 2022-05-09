@@ -62,12 +62,13 @@
 -type ts_client() :: #ts_client{}.
 
 -record(ts_request, {
-    client           :: ts_client(),
-    api              :: ts_api(),
-    sql = undefined  :: map() | undefined,
-    payload = <<>>   :: binary(),
-    response = #{}   :: map(),
-    cache_keys = []  :: list(binary())
+    client                  :: ts_client(),
+    api                     :: ts_api(),
+    sql = undefined         :: map() | undefined,
+    payload = <<>>          :: binary(),
+    response = #{}          :: map(),
+    cache_keys = []         :: list(binary()),
+    expect_resp = undefined :: atom()
     }).
 
 -type ts_request() :: #ts_request{}.
