@@ -18,7 +18,12 @@
 
 -include("ots.hrl").
 
--export([request/3]).
+-export([ request/1
+        , request/3
+        ]).
+
+request(_Request) ->
+    ok.
 
 request(Client, Action, Body) ->
     Headers = headers(Client, Action, Body),
