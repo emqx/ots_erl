@@ -66,9 +66,15 @@
     api                     :: ts_api(),
     sql = undefined         :: map() | undefined,
     payload = <<>>          :: binary(),
-    response = #{}          :: map(),
     cache_keys = []         :: list(binary()),
-    expect_resp = undefined :: atom()
+    expect_resp = undefined :: atom(),
+    request_id = <<>>       :: binary(),
+    response_body = <<>>    :: binary(),
+    response                :: term(),
+    response_handler        :: function(),
+    http_code = 0           :: integer(),
+    retry_times = 0         :: integer(),
+    retry_state = undefined :: term()
     }).
 
 -type ts_request() :: #ts_request{}.

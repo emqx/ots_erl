@@ -83,6 +83,7 @@ get(CacheTab, Key) ->
     end.
 
 put(CacheTable, Caches) ->
+    io:format("update cache ~p~n", [Caches]),
     ets:insert(CacheTable, Caches).
 
 format(Table, Measurement, DataSource, Tags, Cache) ->

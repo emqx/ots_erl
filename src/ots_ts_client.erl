@@ -18,6 +18,10 @@
 
 -include("ots_ts_sql.hrl").
 
+-export([ start/1
+        , stop/1
+        ]).
+
 -export([ create_table/2
         , list_tables/1
         , delete_table/2
@@ -37,6 +41,9 @@
         , access_secret/1
         , cache_table/1
         ]).
+
+start(Opts) -> do_start(Opts).
+stop(Client) -> do_stop(Client).
 
 create_table(Client, SQL)   -> request(Client, SQL, ?FUNCTION_NAME).
 list_tables(Client)         -> request(Client, #{}, ?FUNCTION_NAME).
@@ -60,51 +67,88 @@ cache_table(#ts_client{cache_table = C}) -> C.
 
 %% -------------------------------------------------------------------------------------------------
 %% internal
-request(Client, SQL, Type) ->
-    {ReqTransform, Handler} = transform_request(Type),
-    Req = ReqTransform(Client, SQL),
-    Resp = http_request(Req),
-    %% requested, so retry time is 1
-    handler_response(Req, Resp, Handler, 1, #{}).
+do_start(Opts) ->
+    Pool = proplists:get_value(pool, Opts),
+    PoolBin = atom_to_binary(Pool, utf8),
+    CacheTable = binary_to_atom(<<"ts_cache_", PoolBin/binary>>, utf8),
+    Client = #ts_client{
+        pool          = Pool,
+        endpoint      = proplists:get_value(endpoint, Opts),
+        instance      = proplists:get_value(instance, Opts),
+        access_key    = proplists:get_value(access_key, Opts),
+        access_secret = proplists:get_value(access_secret, Opts),
+        cache_table   = CacheTable
+    },
+    PoolSize = proplists:get_value(pool_size, Opts, 8),
+    PoolOptions = [
+        {pool_size, PoolSize},
+        {timeout, 150000},
+        {max_connections, PoolSize * 8}
+    ],
+    case hackney_pool:start_pool(Pool, PoolOptions) of
+        ok ->
+            CacheOpts = #{
+                cache_table => CacheTable,
+                clean_interval => proplists:get_value(clean_interval, Opts, ?CLEAN_CACHE_INTERVAL),
+                cache_timeout => proplists:get_value(cache_timeout, Opts, ?CACHE_TIMEOUT)
+            },
+            {ok, _} = ots_ts_cache:start(CacheTable, CacheOpts),
+            {ok, Client};
+        Error ->
+            Error
+    end.
 
-handler_response(Req, Resp, Handler, RetryTime, RetryLoop) when RetryTime < ?MAX_RETRY ->
-    case Handler(Req, Resp, RetryLoop) of
+do_stop(Client) ->
+    hackney_pool:stop_pool(pool(Client)),
+    ots_ts_cache:stop(cache_table(Client)).
+
+request(Client, SQL, Type) ->
+    ReqTransform = transform_request(Type),
+    Req = ReqTransform(Client, SQL),
+    NReq = http_request(Req#ts_request{retry_times = 1}),
+    %% requested, so retry time is 1
+    handler_response(NReq).
+
+handler_response(Req = #ts_request{retry_times = RT, response_handler = Handler})
+  when RT < ?MAX_RETRY ->
+    case Handler(Req) of
         {ok, Return} ->
             {ok, Return};
-        {retry, RetryReq, RetryLoop} ->
-            timer:sleep(retry_timeout(RetryTime)),
-            NResp = http_request(Req),
-            handler_response(RetryReq, NResp, Handler, RetryTime + 1, RetryLoop);
+        {retry, RetryReq} ->
+            timer:sleep(retry_timeout(RT)),
+            NReq = http_request(RetryReq),
+            NReq1 = NReq#ts_request{retry_times = RT + 1},
+            handler_response(NReq1);
         {error, R} ->
             {error, R}
     end;
-handler_response(_Req, _Resp, _Handler, _MAX_RETRY, RetryLoop) ->
-    {error, RetryLoop}.
+handler_response(#ts_request{retry_state = RS}) ->
+    {error, RS}.
 
 retry_timeout(RetryTime) when RetryTime > 0 -> RetryTime * retry_timeout(RetryTime - 1);
 retry_timeout(0) -> ?RETRY_TIMEOUT.
 
 transform_request(Type) ->
     EncoderMap = #{
-        create_table   => {fun create_table_req/2,   fun create_table_resp/3},
-        list_tables    => {fun list_tables_req/2,    fun list_tables_resp/3},
-        delete_table   => {fun delete_table_req/2,   fun delete_table_resp/3},
-        update_table   => {fun update_table_req/2,   fun update_table_resp/3},
-        describe_table => {fun describe_table_req/2, fun describe_table_resp/3},
-        query_meta     => {fun query_meta_req/2,     fun query_meta_resp/3},
-        put            => {fun put_req/2,            fun put_resp/3},
-        get            => {fun get_req/2,            fun get_resp/3},
-        update_meta    => {fun update_meta_req/2,    fun update_meta_resp/3},
-        delete_meta    => {fun delete_meta_req/2,    fun delete_meta_resp/3}
+        create_table   => fun create_table_req/2,
+        list_tables    => fun list_tables_req/2,
+        delete_table   => fun delete_table_req/2,
+        update_table   => fun update_table_req/2,
+        describe_table => fun describe_table_req/2,
+        query_meta     => fun query_meta_req/2,
+        put            => fun put_req/2,
+        get            => fun get_req/2,
+        update_meta    => fun update_meta_req/2,
+        delete_meta    => fun delete_meta_req/2
     },
     maps:get(Type, EncoderMap).
 
 %% -------------------------------------------------------------------------------------------------
 %% http request
-http_request(#ts_request{client = Client,
-                         api = API,
-                         payload = Payload,
-                         expect_resp = ExpectRespType}) ->
+http_request(Req = #ts_request{client = Client,
+                               api = API,
+                               payload = Payload,
+                               expect_resp = ExpectRespType}) ->
     Headers = ts_headers(Client, API, Payload),
     Pool = pool(Client),
     Options = [
@@ -117,24 +161,17 @@ http_request(#ts_request{client = Client,
     ],
     Url = list_to_binary([endpoint(Client), API]),
     case hackney:request(post, Url, Headers, Payload, Options) of
-        {ok, 200, RespHeaders, ResponseBody} ->
-            ID = proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
-            Response = decode_resp(ResponseBody, ExpectRespType),
-            {ok, #{
-                request_id => ID,
-                body => ResponseBody,
-                response => Response}
-            };
         {ok, StatusCode, RespHeaders, ResponseBody} ->
             ID = proplists:get_value(<<"x-ots-requestid">>, RespHeaders),
             Response = decode_resp(ResponseBody, ExpectRespType),
-            {error, #{
-                code => StatusCode,
-                request_id => ID,
-                body => ResponseBody,
-                response => Response
-            }};
+            Req#ts_request{
+                http_code = StatusCode,
+                response_body = ResponseBody,
+                response = Response,
+                request_id = ID
+            };
         {error, Reason} ->
+            %% no more action, return error
             {error, Reason}
     end.
 
@@ -150,7 +187,6 @@ decode_error_resp(Body) ->
     catch _:_ ->
         unknow
     end.
-
 
 ts_headers(Client, API, Body) ->
     %% Order by string name.
@@ -181,18 +217,12 @@ sign(API, AccessSecret, HeadersPart1) ->
 list_tables_req(Client, _SQL) ->
     #ts_request{
         client = Client,
-        api = ?LIST_TIMESERIES_TABLE
+        api = ?LIST_TIMESERIES_TABLE,
+        expect_resp = 'ListTimeseriesTableResponse',
+        response_handler = fun list_tables_resp/1
     }.
-%% TODO: check response
-create_table_resp(_Req, Resp, _RetryLoop) -> Resp.
-list_tables_resp(_Req, Resp, _RetryLoop) -> Resp.
-delete_table_resp(_Req, Resp, _RetryLoop) -> Resp.
-update_table_resp(_Req, Resp, _RetryLoop) -> Resp.
-describe_table_resp(_Req, Resp, _RetryLoop) -> Resp.
-query_meta_resp(_Req, Resp, _RetryLoop) -> Resp.
-get_resp(_Req, Resp, _RetryLoop) -> Resp.
-update_meta_resp(_Req, Resp, _RetryLoop) -> Resp.
-delete_meta_resp(_Req, Resp, _RetryLoop) -> Resp.
+
+list_tables_resp(Req)-> format(Req).
 
 %% -------------------------------------------------------------------------------------------------
 %% create table
@@ -200,16 +230,22 @@ create_table_req(Client, SQL) ->
     #ts_request{
         client = Client,
         sql = SQL,
-        api = ?CREATE_TIMESERIES_TABLE
+        api = ?CREATE_TIMESERIES_TABLE,
+        response_handler = fun create_table_resp/1
     }.
+create_table_resp(Req) -> {ok, Req}.
+
 %% -------------------------------------------------------------------------------------------------
 %% delete table
 delete_table_req(Client, SQL) ->
     #ts_request{
         client = Client,
         sql = SQL,
-        api = ?DELETE_TIMESERIES_TABLE
+        api = ?DELETE_TIMESERIES_TABLE,
+        response_handler = fun delete_table_resp/1
     }.
+
+delete_table_resp(Req) -> {ok, Req}.
 
 %% -------------------------------------------------------------------------------------------------
 %% update table
@@ -217,8 +253,11 @@ update_table_req(Client, SQL) ->
     #ts_request{
         client = Client,
         sql = SQL,
-        api = ?UPDATE_TIMESERIES_TABLE
+        api = ?UPDATE_TIMESERIES_TABLE,
+        response_handler = fun update_table_resp/1
     }.
+
+update_table_resp(Req) -> {ok, Req}.
 
 %% -------------------------------------------------------------------------------------------------
 %% describe table
@@ -226,8 +265,11 @@ describe_table_req(Client, SQL) ->
     #ts_request{
         client = Client,
         sql = SQL,
-        api = ?DESCRIBE_TIMESERIES_TABLE
+        api = ?DESCRIBE_TIMESERIES_TABLE,
+        response_handler = fun describe_table_resp/1
     }.
+
+describe_table_resp(Req) -> {ok, Req}.
 
 %% -------------------------------------------------------------------------------------------------
 %% query meta
@@ -235,16 +277,31 @@ query_meta_req(Client, SQL) ->
     #ts_request{
         client = Client,
         sql = SQL,
-        api = ?QUERY_TIMESERIES_META
+        api = ?QUERY_TIMESERIES_META,
+        response_handler = fun query_meta_resp/1
     }.
+
+query_meta_resp(Req) -> {ok, Req}.
 
 %% -------------------------------------------------------------------------------------------------
 %% put row
 put_req(Client, SQL) ->
+    put_req(Client, SQL, #{}).
+
+put_req(Client, SQL, RetryState) ->
     CacheTab = cache_table(Client),
     TableName = maps:get(table_name, SQL),
     MetaUpdateMode = maps:get(meta_update_mode, SQL, 'MUM_IGNORE'),
-    Rows = rows_time(maps:get(rows_data, SQL, [])),
+    %% ensure row has time field.
+    Rows =
+        [begin
+            case Row of
+                #{time := T} when is_integer(T) ->
+                    Row;
+                _ ->
+                    Row#{time => erlang:system_time(microsecond)}
+            end
+        end || Row <- maps:get(rows_data, SQL, [])],
     {RowsBinaryData, CacheKeys} = encode_pb_rows(CacheTab, TableName, Rows, MetaUpdateMode),
     OTSRequest = #'PutTimeseriesDataRequest'{
         table_name = TableName,
@@ -261,30 +318,31 @@ put_req(Client, SQL) ->
         sql         = SQL#{rows_data => Rows},
         payload     = ots_ts_sql:encode_msg(OTSRequest),
         cache_keys  = CacheKeys,
-        expect_resp = 'PutTimeseriesDataResponse'
+        expect_resp = 'PutTimeseriesDataResponse',
+        retry_state = RetryState,
+        response_handler = fun put_resp/1
     }.
 
-put_resp(Req = #ts_request{client = Client, cache_keys = CacheKeys},
-        _Resp = {ok, #{
-             request_id := RequestID,
-             response := #'PutTimeseriesDataResponse'{
-                meta_update_status = #'MetaUpdateStatus'{
-                    'row_ids' = IDs,
-                    'meta_update_times' = Times},
-                failed_rows = FailedRows}}},
-        RetryLoop) ->
+put_resp(Req = #ts_request{sql = SQL, response = Error}) when is_record(Error, 'ErrorResponse') ->
+    RetryState = #{retry => maps:get(rows_data, SQL, [])},
+    {retry, Req#ts_request{retry_state = RetryState}};
+put_resp(Req = #ts_request{ client = Client,
+                            cache_keys = CacheKeys,
+                            request_id = RequestID,
+                            response = #'PutTimeseriesDataResponse'{
+                                meta_update_status = #'MetaUpdateStatus'{
+                                    'row_ids' = IDs,
+                                    'meta_update_times' = Times},
+                                failed_rows = FailedRows},
+                            retry_state = RSate}) ->
     CacheTab = cache_table(Client),
     ok = update_cache(CacheTab, CacheKeys, IDs, Times),
-    case FailedRows of
-        [] ->
+    case is_empty_list(FailedRows) of
+        true ->
             {ok, #{request_id => RequestID}};
         _ ->
-            retry_put(Req, FailedRows, RequestID, RetryLoop)
-    end;
-
-put_resp(Req = #ts_request{sql = SQL} , _Resp = {ok, #{response := #'ErrorResponse'{}}}, RetryLoop) ->
-    Rows = maps:get(rows_data, SQL, []),
-    {retry, Req, RetryLoop#{failed => Rows}}.
+            retry_put(Req, FailedRows, RSate)
+    end.
 
 update_cache(CacheTab, CacheKeys, IDs, Caches) ->
     case
@@ -317,28 +375,26 @@ update_caches(CacheKeys, [Index | IDs], [Cache | Caches], NewCaches) ->
             NewCaches
     end.
 
-is_empty_list(List) when is_list(List) -> erlang:length(List) == 0;
-is_empty_list(_) -> true.
-
-retry_put(#ts_request{sql = SQL, client = Client}, FailedIndexList, RequestID, RetryLoop) ->
+retry_put(#ts_request{client = Client, sql = SQL, request_id = ID},
+          FailedRowsIndex,
+          RetryState) ->
     Rows = maps:get(rows_data, SQL, []),
-    LastFailed = maps:get(failed, RetryLoop, []),
-    NextLoop = #{request_id => RequestID},
-    case retry_aggregate(Rows, FailedIndexList) of
+    LastFailed = maps:get(failed, RetryState, []),
+    case retry_aggregate(Rows, FailedRowsIndex) of
         {error, R} ->
-            {error, NextLoop#{reason => R}};
+            {error, #{request_id => ID, reason => R}};
         {[], Failed} ->
             %% no more retry, all failed.
-            {error, NextLoop#{failed => lists:append(LastFailed, Failed)}};
+            {error, #{request_id => ID, failed => lists:append(LastFailed, Failed)}};
         {RetryRows, Failed} ->
             %% retry some. and failed the no retry rows.
             RetrySQL = SQL#{rows_data => RetryRows},
-            RetryReq = put_req(Client, RetrySQL),
-            {retry, RetryReq, NextLoop#{failed => lists:append(LastFailed, Failed)}}
+            RetryState = #{failed => lists:append(LastFailed, Failed)},
+            {retry, put_req(Client, RetrySQL, RetryState)}
     end.
 
-retry_aggregate(Rows, FailedIndexList) ->
-    retry_aggregate(Rows, FailedIndexList, [], []).
+retry_aggregate(Rows, FailedRowsIndex) ->
+    retry_aggregate(Rows, FailedRowsIndex, [], []).
 retry_aggregate(_Rows, [], Retry, Failed) ->
     {Retry, Failed};
 retry_aggregate(Rows,
@@ -361,17 +417,6 @@ retry_aggregate(Rows,
         false ->
             {error, {bad_response, index_out_of_range}}
     end.
-
-%% ensure row has time field.
-rows_time(Rows) ->
-    [begin
-        case Row of
-            #{time := T} when is_integer(T) ->
-                Row;
-            _ ->
-                Row#{time => erlang:system_time(microsecond)}
-        end
-    end || Row <- Rows].
 
 encode_pb_rows(CacheTab, TableName, Rows, MetaUpdateMode) ->
     encode_pb_rows(CacheTab, TableName, Rows, MetaUpdateMode, {[], []}).
@@ -451,6 +496,68 @@ to_field(Key, Value) when is_binary(Value) ->
 to_field(Key, _Value) ->
     #'TimeseriesField'{field_name = Key}.
 
+%% -------------------------------------------------------------------------------------------------
+%% get row
+get_req(Client, SQL) ->
+    #ts_request{
+        client = Client,
+        sql = SQL,
+        api = ?GET_TIMESERIES_DATA,
+        response_handler = fun get_resp/1
+    }.
+
+get_resp(Req) -> {ok, Req}.
+
+%% -------------------------------------------------------------------------------------------------
+%% update meta
+update_meta_req(Client, SQL) ->
+    #ts_request{
+        client = Client,
+        sql = SQL,
+        api = ?UPDATE_TIMESERIES_META,
+        response_handler = fun update_meta_resp/1
+    }.
+
+update_meta_resp(Req) -> {ok, Req}.
+
+%% -------------------------------------------------------------------------------------------------
+%% delete meta
+delete_meta_req(Client, SQL) ->
+    #ts_request{
+        client = Client,
+        sql = SQL,
+        api = ?DELETE_TIMESERIES_META,
+        response_handler = fun delete_meta_resp/1
+    }.
+
+delete_meta_resp(Req) -> {ok, Req}.
+
+%% -------------------------------------------------------------------------------------------------
+%% util
+
+format(#ts_request{http_code = StatusCode, request_id = ID, response = Response}) ->
+    case format(Response) of
+        {ok, Format} ->
+            {ok, Format};
+        {error, R} when is_map(R) ->
+            R#{http_code => StatusCode, request_id => ID}
+    end;
+
+format(#'ListTimeseriesTableResponse'{table_metas = TableMetas}) ->
+    {ok,
+        [#{table_name => TableName, status => Status, time_to_live => TimeToLive}
+        ||
+        #'TimeseriesTableMeta'{
+                table_name = TableName,
+                status = Status,
+                table_options = #'TimeseriesTableOptions'{
+                    time_to_live = TimeToLive}} <- TableMetas]};
+format(#'ErrorResponse'{code = Code, message = Message}) ->
+    {error, #{code => Code, message => Message}}.
+
+is_empty_list(List) when is_list(List) -> erlang:length(List) == 0;
+is_empty_list(_) -> true.
+
 to_binary(Bin)  when is_binary(Bin) -> Bin;
 to_binary(Num)  when is_number(Num) -> number_to_binary(Num);
 to_binary(Atom) when is_atom(Atom)  -> atom_to_binary(Atom, utf8);
@@ -464,30 +571,3 @@ number_to_binary(Int) when is_integer(Int) ->
     integer_to_binary(Int);
 number_to_binary(Float) when is_float(Float) ->
     float_to_binary(Float, [{decimals, 10}, compact]).
-
-%% -------------------------------------------------------------------------------------------------
-%% get row
-get_req(Client, SQL) ->
-    #ts_request{
-        client = Client,
-        sql = SQL,
-        api = ?GET_TIMESERIES_DATA
-    }.
-
-%% -------------------------------------------------------------------------------------------------
-%% update meta
-update_meta_req(Client, SQL) ->
-    #ts_request{
-        client = Client,
-        sql = SQL,
-        api = ?UPDATE_TIMESERIES_META
-    }.
-
-%% -------------------------------------------------------------------------------------------------
-%% delete meta
-delete_meta_req(Client, SQL) ->
-    #ts_request{
-        client = Client,
-        sql = SQL,
-        api = ?DELETE_TIMESERIES_META
-    }.
