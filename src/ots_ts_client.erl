@@ -555,7 +555,7 @@ format(#ts_request{http_code = StatusCode, request_id = ID, response = Response}
         {ok, Format} ->
             {ok, Format};
         {error, R} when is_map(R) ->
-            R#{http_code => StatusCode, request_id => ID}
+            {error, R#{http_code => StatusCode, request_id => ID}}
     end;
 
 format(#'ListTimeseriesTableResponse'{table_metas = TableMetas}) ->
