@@ -20,8 +20,11 @@
 -define(CACHE_TIMEOUT, 10 *  60 * 1000).
 
 %% request failed is the first time, then retry 2 times, so the total retry times is 3.
--define(MAX_RETRY, 2).
+-define(MAX_RETRY, 3).
 -define(RETRY_TIMEOUT, 300).
+
+-define(NO_RETRY_CODES, [<<"OTSParameterInvalid">>, <<"OTSAuthFailed">>]).
+-define(RETRY_CODE(Code), (not lists:member(Code, ?NO_RETRY_CODES))).
 
 %% time series
 -define(CREATE_TIMESERIES_TABLE     , "/CreateTimeseriesTable").

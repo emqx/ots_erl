@@ -40,15 +40,17 @@ test() ->
     },
 
     Tags3 = [{"t_int", 3}],
-    Tags4 = #{},
+    Tags4 = [{io_lib:format("t_int_~p", [I]), I} || I <- lists:seq(1, 1000)],
+
 
     Rows = [
         % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags1}
         % #{meta_update_mode => 'MUM_NORMAL', measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags2},
-        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags4}
+        % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags4},
+        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3}
     ],
     Data = #{
-        table_name => <<"flatbuffer_tab_test">>,
+        table_name => <<"flatbuffer_tab_test1">>,
         rows_data => Rows,
         meta_update_mode => 'MUM_NORMAL'
     },
@@ -77,6 +79,7 @@ test() ->
     % read_response("IsAlive", IsAlive),
     read_response("Write", Write),
     timer:sleep(2000),
+    loop_put(Client, Data, 1),
     Caches2 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("Caches2", Caches2),
     ListTables = ots_ts_client:list_tables(Client),
@@ -88,12 +91,15 @@ test() ->
     % read_response("Stop", Stop),
     ok.
 
+loop_put(Client, Data, Time) ->
+    Write = ots_ts_client:put(Client, Data),
+    read_response("Write", [Write, Time]),
+    timer:sleep(200),
+    loop_put(Client, Data, Time + 1).
 
-read_response(Title, {error, {Code, Message}}) ->
-    io:format("~p ~p: ~s~n", [Title, Code, Message]);
 
 read_response(Title, {ok, Message}) ->
-    io:format("~p : ~p~n", [Title, Message]);
+    io:format("~p : ~p~n", [Title, {ok, Message}]);
 
 read_response(Title, Message) ->
-    io:format("~p : ~p~n", [Title, Message]).
+    io:format("~p : ~0p~n", [Title, Message]).

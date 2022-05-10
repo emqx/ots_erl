@@ -105,20 +105,20 @@ do_stop(Client) ->
 request(Client, SQL, Type) ->
     ReqTransform = transform_request(Type),
     Req = ReqTransform(Client, SQL),
-    NReq = http_request(Req#ts_request{retry_times = 1}),
-    %% requested, so retry time is 1
+    NReq = http_request(Req#ts_request{retry_times = 0}),
     handler_response(NReq).
 
-handler_response(Req = #ts_request{retry_times = RT, response_handler = Handler})
-  when RT < ?MAX_RETRY ->
+handler_response(Req = #ts_request{retry_times = RT0, response_handler = Handler})
+  when RT0 < ?MAX_RETRY ->
     case Handler(Req) of
         {ok, Return} ->
             {ok, Return};
         {retry, RetryReq} ->
+            %% sleep & retry request
+            RT = RT0 + 1,
             timer:sleep(retry_timeout(RT)),
-            NReq = http_request(RetryReq),
-            NReq1 = NReq#ts_request{retry_times = RT + 1},
-            handler_response(NReq1);
+            NReq = http_request(RetryReq#ts_request{retry_times = RT}),
+            handler_response(NReq);
         {error, R} ->
             {error, R}
     end;
@@ -338,20 +338,24 @@ put_resp_ignore(#ts_request{http_code = HCode, request_id = ID}) ->
             {error, #{http_code => HCode, request_id => ID}}
     end.
 
-put_resp(Req = #ts_request{sql = SQL, response = Error}) when is_record(Error, 'ErrorResponse') ->
-    RetryState = #{retry => maps:get(rows_data, SQL, [])},
-    {retry, Req#ts_request{retry_state = RetryState}};
+put_resp(Req = #ts_request{response = Error = #'ErrorResponse'{code = Code}, request_id = ID}) ->
+    case ?RETRY_CODE(Code) of
+        true ->
+            {_, ErrorFormat} = format(Error),
+            RetryState = ErrorFormat#{request_id => ID},
+            {retry, Req#ts_request{retry_state = RetryState}};
+        false ->
+            format(Error)
+    end;
 put_resp(Req = #ts_request{ client = Client,
                             cache_keys = CacheKeys,
                             request_id = RequestID,
                             response = #'PutTimeseriesDataResponse'{
-                                meta_update_status = #'MetaUpdateStatus'{
-                                    'row_ids' = IDs,
-                                    'meta_update_times' = Times},
+                                meta_update_status = MetaUpdateStatus,
                                 failed_rows = FailedRows},
                             retry_state = RSate}) ->
     CacheTab = cache_table(Client),
-    ok = update_cache(CacheTab, CacheKeys, IDs, Times),
+    ok = update_cache(CacheTab, CacheKeys, MetaUpdateStatus),
     case is_empty_list(FailedRows) of
         true ->
             {ok, #{request_id => RequestID}};
@@ -359,6 +363,12 @@ put_resp(Req = #ts_request{ client = Client,
             retry_put(Req, FailedRows, RSate)
     end.
 
+
+update_cache(_CacheTab, _CacheKeys, undefined) -> ok;
+update_cache(CacheTab,
+             CacheKeys,
+             #'MetaUpdateStatus'{'row_ids' = IDs,'meta_update_times' = Times}) ->
+    update_cache(CacheTab, CacheKeys, IDs, Times).
 update_cache(CacheTab, CacheKeys, IDs, Caches) ->
     case
         is_empty_list(CacheKeys) orelse
@@ -393,10 +403,12 @@ update_caches(CacheKeys, [Index | IDs], [Cache | Caches], NewCaches) ->
 retry_put(#ts_request{client = Client, sql = SQL, request_id = ID},
           FailedRowsIndex,
           RetryState) ->
+    io:format("retry ~p~n", [SQL]),
     Rows = maps:get(rows_data, SQL, []),
     LastFailed = maps:get(failed, RetryState, []),
     case retry_aggregate(Rows, FailedRowsIndex) of
         {error, R} ->
+            %% some error response from ots.
             {error, #{request_id => ID, reason => R}};
         {[], Failed} ->
             %% no more retry, all failed.
@@ -404,8 +416,11 @@ retry_put(#ts_request{client = Client, sql = SQL, request_id = ID},
         {RetryRows, Failed} ->
             %% retry some. and failed the no retry rows.
             RetrySQL = SQL#{rows_data => RetryRows},
-            RetryState = #{failed => lists:append(LastFailed, Failed)},
-            {retry, put_req(Client, RetrySQL, RetryState)}
+            NRetryState = #{
+                retry => RetryRows,
+                failed => lists:append(LastFailed, Failed)
+            },
+            {retry, put_req(Client, RetrySQL, NRetryState)}
     end.
 
 retry_aggregate(Rows, FailedRowsIndex) ->
@@ -421,11 +436,13 @@ retry_aggregate(Rows,
     case 0 < ErlangIndex andalso ErlangIndex =< length(Rows) of
         true ->
             Row = lists:nth(ErlangIndex, Rows),
-            NoRetryCodes = [<<"OTSParameterInvalid">>, <<"OTSAuthFailed">>],
-            case lists:member(Code, NoRetryCodes)  of
+            case ?RETRY_CODE(Code) of
                 true ->
-                    retry_aggregate(Rows, FailedRows, Retry,
-                        [#{row => Row, error_code => Code, error_message => Message} | Failed]);
+                    FailedRowInfo = #{
+                        row_index => ErlangIndex,
+                        code => Code,
+                        message => Message},
+                    retry_aggregate(Rows, FailedRows, Retry, [FailedRowInfo | Failed]);
                 false ->
                     retry_aggregate(Rows, FailedRows, [Row | Retry], [Failed])
             end;
@@ -576,11 +593,7 @@ is_empty_list(_) -> true.
 to_binary(Bin)  when is_binary(Bin) -> Bin;
 to_binary(Num)  when is_number(Num) -> number_to_binary(Num);
 to_binary(Atom) when is_atom(Atom)  -> atom_to_binary(Atom, utf8);
-to_binary(List) when is_list(List)  ->
-    case io_lib:printable_list(List) of
-        true -> list_to_binary(List);
-        false -> emqx_json:encode(List)
-    end.
+to_binary(List) when is_list(List)  -> list_to_binary(List).
 
 number_to_binary(Int) when is_integer(Int) ->
     integer_to_binary(Int);
