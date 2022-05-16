@@ -119,11 +119,13 @@ handler_response(Req = #ts_request{retry_times = RT0, response_handler = Handler
             timer:sleep(retry_timeout(RT)),
             NReq = http_request(RetryReq#ts_request{retry_times = RT}),
             handler_response(NReq);
+        {error, R} when is_map(R) ->
+            {error, R#{retry_times => RT0}};
         {error, R} ->
-            {error, R}
+            {error, #{reason=> R, retry_times => RT0}}
     end;
-handler_response(#ts_request{retry_state = RS}) ->
-    {error, RS}.
+handler_response(#ts_request{retry_state = RS, retry_times = RT}) ->
+    {error, RS#{reason => retry_timeout, retry_times => RT}}.
 
 retry_timeout(RetryTime) when RetryTime > 0 -> RetryTime * retry_timeout(RetryTime - 1);
 retry_timeout(0) -> ?RETRY_TIMEOUT.
@@ -403,7 +405,6 @@ update_caches(CacheKeys, [Index | IDs], [Cache | Caches], NewCaches) ->
 retry_put(#ts_request{client = Client, sql = SQL, request_id = ID},
           FailedRowsIndex,
           RetryState) ->
-    io:format("retry ~p~n", [SQL]),
     Rows = maps:get(rows_data, SQL, []),
     LastFailed = maps:get(failed, RetryState, []),
     case retry_aggregate(Rows, FailedRowsIndex) of

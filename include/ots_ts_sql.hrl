@@ -77,7 +77,7 @@
     response_handler        :: function(),
     http_code = 0           :: integer(),
     retry_times = 0         :: integer(),
-    retry_state = undefined :: term()
+    retry_state = #{}       :: map()
     }).
 
 -type ts_request() :: #ts_request{}.
