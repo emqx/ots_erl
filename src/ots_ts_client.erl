@@ -105,27 +105,34 @@ do_stop(Client) ->
 request(Client, SQL, Type) ->
     ReqTransform = transform_request(Type),
     Req = ReqTransform(Client, SQL),
-    NReq = http_request(Req#ts_request{retry_times = 0}),
-    handler_response(NReq).
+    case http_request(Req#ts_request{retry_times = 0}) of
+        {error, R} ->
+            {error, R};
+        NReq ->
+            handler_response(NReq)
+    end.
 
-handler_response(Req = #ts_request{retry_times = RT0, response_handler = Handler})
-  when RT0 < ?MAX_RETRY ->
+handler_response(Req = #ts_request{retry_times = RT0,
+                                   response_handler = Handler}) ->
     case Handler(Req) of
         {ok, Return} ->
             {ok, Return};
-        {retry, RetryReq} ->
-            %% sleep & retry request
-            RT = RT0 + 1,
-            timer:sleep(retry_timeout(RT)),
-            NReq = http_request(RetryReq#ts_request{retry_times = RT}),
-            handler_response(NReq);
+        {retry, RetryReq = #ts_request{retry_state = NRS}} ->
+            case RT0 < ?MAX_RETRY of
+                true ->
+                    %% sleep & retry request
+                    RT = RT0 + 1,
+                    timer:sleep(retry_timeout(RT)),
+                    NReq = http_request(RetryReq#ts_request{retry_times = RT}),
+                    handler_response(NReq);
+                false ->
+                    {error, NRS#{reason => retry_timeout, retry_times => RT0}}
+            end;
         {error, R} when is_map(R) ->
             {error, R#{retry_times => RT0}};
         {error, R} ->
             {error, #{reason=> R, retry_times => RT0}}
-    end;
-handler_response(#ts_request{retry_state = RS, retry_times = RT}) ->
-    {error, RS#{reason => retry_timeout, retry_times => RT}}.
+    end.
 
 retry_timeout(RetryTime) when RetryTime > 0 -> RetryTime * retry_timeout(RetryTime - 1);
 retry_timeout(0) -> ?RETRY_TIMEOUT.
@@ -346,14 +353,14 @@ put_resp(Req = #ts_request{response = Error = #'ErrorResponse'{code = Code},
                            retry_state = RS
                           }) ->
     {_, ErrorFormat} = format(Error),
-    RTLog = maps:get(retry_log, RS, #{}),
+    RTLog = maps:get(request_log, RS, #{}),
     NRTLog = #{
         RT => #{
             request_id => ID,
             reason => ErrorFormat
         }
     },
-    RetryState = #{retry_log => maps:merge(RTLog, NRTLog)},
+    RetryState = #{request_log => maps:merge(RTLog, NRTLog)},
     case ?RETRY_CODE(Code) of
         true ->
             {retry, Req#ts_request{retry_state = RetryState}};
@@ -418,7 +425,7 @@ retry_put(#ts_request{client = Client, sql = SQL, request_id = ID, retry_times =
           RetryState) ->
     Rows = maps:get(rows_data, SQL, []),
     LastFailed = maps:get(failed, RetryState, []),
-    RetryLog = maps:get(retry_log, RetryState, #{}),
+    OldReqLog = maps:get(request_log, RetryState, #{}),
     case retry_aggregate(Rows, FailedRowsIndex) of
         {error, R} ->
             NRTLog = #{
@@ -431,7 +438,7 @@ retry_put(#ts_request{client = Client, sql = SQL, request_id = ID, retry_times =
                 request_id => ID,
                 retry => [],
                 failed => Rows,
-                retry_log => maps:merge(RetryLog, NRTLog)
+                request_log => maps:merge(OldReqLog, NRTLog)
             },
             %% some error response from ots.
             {error, NRetryState};
@@ -447,7 +454,7 @@ retry_put(#ts_request{client = Client, sql = SQL, request_id = ID, retry_times =
                 retry => [],
                 request_id => ID,
                 failed => lists:append(LastFailed, Failed),
-                retry_log => maps:merge(RetryLog, NRTLog)
+                request_log => maps:merge(OldReqLog, NRTLog)
             },
             {error, NRetryState};
         {RetryRows, Failed} ->
@@ -462,7 +469,7 @@ retry_put(#ts_request{client = Client, sql = SQL, request_id = ID, retry_times =
             NRetryState = #{
                 retry => RetryRows,
                 failed => lists:append(LastFailed, Failed),
-                retry_log => maps:merge(RetryLog, NRTLog)
+                request_log => maps:merge(OldReqLog, NRTLog)
             },
             {retry, put_req(Client, RetrySQL, NRetryState)}
     end.

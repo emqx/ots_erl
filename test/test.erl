@@ -86,8 +86,8 @@ test() ->
     loop_put(Client, Data, 1),
     Caches2 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("Caches2", Caches2),
-    ListTables = ots_ts_client:list_tables(Client),
-    read_response("ListTables", ListTables),
+    % ListTables = ots_ts_client:list_tables(Client),
+    % read_response("ListTables", ListTables),
     % Write2 = ots:write(Client, Data),
     % read_response("Write2", Write2),
     %% ets:tab2list(ts_cache_test_demo_pool).
