@@ -340,14 +340,25 @@ put_resp_ignore(#ts_request{http_code = HCode, request_id = ID}) ->
             {error, #{http_code => HCode, request_id => ID}}
     end.
 
-put_resp(Req = #ts_request{response = Error = #'ErrorResponse'{code = Code}, request_id = ID}) ->
+put_resp(Req = #ts_request{response = Error = #'ErrorResponse'{code = Code},
+                           request_id = ID,
+                           retry_times = RT,
+                           retry_state = RS
+                          }) ->
+    {_, ErrorFormat} = format(Error),
+    RTLog = maps:get(retry_log, RS, #{}),
+    NRTLog = #{
+        RT => #{
+            request_id => ID,
+            reason => ErrorFormat
+        }
+    },
+    RetryState = #{retry_log => maps:merge(RTLog, NRTLog)},
     case ?RETRY_CODE(Code) of
         true ->
-            {_, ErrorFormat} = format(Error),
-            RetryState = ErrorFormat#{request_id => ID},
             {retry, Req#ts_request{retry_state = RetryState}};
         false ->
-            format(Error)
+            {error, RetryState}
     end;
 put_resp(Req = #ts_request{ client = Client,
                             cache_keys = CacheKeys,
@@ -402,24 +413,56 @@ update_caches(CacheKeys, [Index | IDs], [Cache | Caches], NewCaches) ->
             NewCaches
     end.
 
-retry_put(#ts_request{client = Client, sql = SQL, request_id = ID},
+retry_put(#ts_request{client = Client, sql = SQL, request_id = ID, retry_times = RT},
           FailedRowsIndex,
           RetryState) ->
     Rows = maps:get(rows_data, SQL, []),
     LastFailed = maps:get(failed, RetryState, []),
+    RetryLog = maps:get(retry_log, RetryState, #{}),
     case retry_aggregate(Rows, FailedRowsIndex) of
         {error, R} ->
+            NRTLog = #{
+                RT => #{
+                    request_id => ID,
+                    reason => R
+                }
+            },
+            NRetryState = #{
+                request_id => ID,
+                retry => [],
+                failed => Rows,
+                retry_log => maps:merge(RetryLog, NRTLog)
+            },
             %% some error response from ots.
-            {error, #{request_id => ID, reason => R}};
+            {error, NRetryState};
         {[], Failed} ->
             %% no more retry, all failed.
-            {error, #{request_id => ID, failed => lists:append(LastFailed, Failed)}};
+            NRTLog = #{
+                RT => #{
+                    request_id => ID,
+                    reason => Failed
+                }
+            },
+            NRetryState = #{
+                retry => [],
+                request_id => ID,
+                failed => lists:append(LastFailed, Failed),
+                retry_log => maps:merge(RetryLog, NRTLog)
+            },
+            {error, NRetryState};
         {RetryRows, Failed} ->
             %% retry some. and failed the no retry rows.
+            NRTLog = #{
+                RT => #{
+                    request_id => ID,
+                    failed => Failed
+                }
+            },
             RetrySQL = SQL#{rows_data => RetryRows},
             NRetryState = #{
                 retry => RetryRows,
-                failed => lists:append(LastFailed, Failed)
+                failed => lists:append(LastFailed, Failed),
+                retry_log => maps:merge(RetryLog, NRTLog)
             },
             {retry, put_req(Client, RetrySQL, NRetryState)}
     end.
@@ -438,13 +481,13 @@ retry_aggregate(Rows,
         true ->
             Row = lists:nth(ErlangIndex, Rows),
             case ?RETRY_CODE(Code) of
-                true ->
+                false ->
                     FailedRowInfo = #{
                         row_index => ErlangIndex,
                         code => Code,
                         message => Message},
                     retry_aggregate(Rows, FailedRows, Retry, [FailedRowInfo | Failed]);
-                false ->
+                true ->
                     retry_aggregate(Rows, FailedRows, [Row | Retry], [Failed])
             end;
         false ->

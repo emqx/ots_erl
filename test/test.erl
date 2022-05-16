@@ -47,10 +47,14 @@ test() ->
         % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags1}
         % #{meta_update_mode => 'MUM_NORMAL', measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields1, tags => Tags2},
         % #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags4},
-        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3}
+        #{measurement => <<"measurement1">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3},
+        #{measurement => <<"measurement2">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3},
+        #{measurement => <<"measurement3">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3},
+        #{measurement => <<"measurement4">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3},
+        #{measurement => <<"measurement5">>, data_source => <<"data_source1">>, fields => Fields2, tags => Tags3}
     ],
     Data = #{
-        table_name => <<"flatbuffer_tab_test1">>,
+        table_name => <<"flatbuffer_tab_test">>,
         rows_data => Rows,
         meta_update_mode => 'MUM_NORMAL'
     },
@@ -78,7 +82,7 @@ test() ->
     % read_response("ListTable", List),
     % read_response("IsAlive", IsAlive),
     read_response("Write", Write),
-    timer:sleep(2000),
+    % timer:sleep(2000),
     loop_put(Client, Data, 1),
     Caches2 = ets:tab2list(ts_cache_test_demo_pool),
     read_response("Caches2", Caches2),
@@ -93,7 +97,7 @@ test() ->
 
 loop_put(Client, Data, Time) ->
     Write = ots_ts_client:put(Client, Data),
-    read_response("Write", [Write, Time]),
+    loop_read_response("Write", [Write, Time]),
     timer:sleep(200),
     loop_put(Client, Data, Time + 1).
 
@@ -102,4 +106,7 @@ read_response(Title, {ok, Message}) ->
     io:format("~p : ~p~n", [Title, {ok, Message}]);
 
 read_response(Title, Message) ->
+    io:format("~p : ~p~n", [Title, Message]).
+
+loop_read_response(Title, Message) ->
     io:format("~p : ~0p~n", [Title, Message]).
