@@ -69,7 +69,7 @@ cache_table(#ts_client{cache_table = C}) -> C.
 %% internal
 do_start(Opts) ->
     Pool = proplists:get_value(pool, Opts),
-    PoolBin = atom_to_binary(Pool, utf8),
+    PoolBin = to_binary(Pool),
     CacheTable = binary_to_atom(<<"ts_cache_", PoolBin/binary>>, utf8),
     Client = #ts_client{
         pool          = Pool,
