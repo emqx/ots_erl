@@ -562,21 +562,31 @@ to_fields(Fields) ->
 
 %% ensure binary key
 to_field({Key, Value}) ->
-    to_field(to_binary(Key), Value).
+    to_field(to_binary(Key), Value, #{});
+to_field({Key, Value, Opts}) ->
+    to_field(to_binary(Key), Value, Opts).
 
-to_field(Key, Value) when is_integer(Value) ->
-    #'TimeseriesField'{field_name = Key, value_int = Value};
-to_field(Key, Value) when is_float(Value) ->
+to_field(Key, Value, Opts) when is_integer(Value) ->
+    %% if it is a integer, write as float by default.
+    case maps:get(isint, Opts, false) of
+        false -> #'TimeseriesField'{field_name = Key, value_double = Value};
+        true -> #'TimeseriesField'{field_name = Key, value_int = Value}
+    end;
+to_field(Key, Value, _) when is_float(Value) ->
     #'TimeseriesField'{field_name = Key, value_double = Value};
-to_field(Key, Value) when is_boolean(Value) ->
+to_field(Key, Value, _) when is_boolean(Value) ->
     #'TimeseriesField'{field_name = Key, value_bool = Value};
-to_field(Key, Value) when is_atom(Value) ->
+to_field(Key, Value, _) when is_atom(Value) ->
     #'TimeseriesField'{field_name = Key, value_string = atom_to_list(Value)};
-to_field(Key, Value) when is_list(Value) ->
+to_field(Key, Value, _) when is_list(Value) ->
     #'TimeseriesField'{field_name = Key, value_string = Value};
-to_field(Key, Value) when is_binary(Value) ->
-    #'TimeseriesField'{field_name = Key, value_binary = Value};
-to_field(Key, _Value) ->
+to_field(Key, Value, Opts) when is_binary(Value) ->
+    %% if it is a binary value, write as string by default.
+    case maps:get(isbinary, Opts, false) of
+        false -> #'TimeseriesField'{field_name = Key, value_string = Value};
+        true -> #'TimeseriesField'{field_name = Key, value_binary = Value}
+    end;
+to_field(Key, _Value, _) ->
     #'TimeseriesField'{field_name = Key}.
 
 %% -------------------------------------------------------------------------------------------------
