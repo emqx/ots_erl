@@ -61,8 +61,8 @@ delete_meta(Client, SQL)    -> request(Client, SQL, ?FUNCTION_NAME).
 pool(#ts_client{pool = P}) -> P.
 endpoint(#ts_client{endpoint = E}) -> E.
 instance(#ts_client{instance = I}) -> I.
-access_key(#ts_client{access_key = K}) -> K.
-access_secret(#ts_client{access_secret = S}) -> S.
+access_key(#ts_client{access_key = K}) -> unwrap_secret(K).
+access_secret(#ts_client{access_secret = S}) -> unwrap_secret(S).
 cache_table(#ts_client{cache_table = C}) -> C.
 
 %% -------------------------------------------------------------------------------------------------
@@ -660,3 +660,11 @@ number_to_binary(Int) when is_integer(Int) ->
     integer_to_binary(Int);
 number_to_binary(Float) when is_float(Float) ->
     float_to_binary(Float, [{decimals, 10}, compact]).
+
+%% @doc Unwrap a secret closure, revealing the secret.
+%% This is either `Term` or `Module:Function(Term)` depending on how it was wrapped.
+unwrap_secret(Term) when is_function(Term, 0) ->
+    %% Handle potentially nested funs
+    unwrap_secret(Term());
+unwrap_secret(Term) ->
+    Term.
