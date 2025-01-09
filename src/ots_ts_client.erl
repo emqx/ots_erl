@@ -212,8 +212,9 @@ ts_headers(Client, API, Body) ->
     lists:append(HeadersPart1, [Sign]).
 
 iso8601_now() ->
-    {DatePart1, {H, M, S}} = calendar:universal_time(),
-    iso8601:format({DatePart1, {H, M, S * 1.0}}).
+    %% NOTE: RFC3339 UTC Timestamp is valid ISO8601 Timestamp.
+    Time = erlang:system_time(millisecond),
+    iolist_to_binary(calendar:system_time_to_rfc3339(Time, [{offset, "Z"}, {unit, millisecond}])).
 
 sign(API, AccessSecret, HeadersPart1) ->
     StringToSign = [API, "\nPOST\n\n"],
