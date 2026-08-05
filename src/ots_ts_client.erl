@@ -276,10 +276,14 @@ describe_table_req(Client, SQL) ->
         client = Client,
         sql = SQL,
         api = ?DESCRIBE_TIMESERIES_TABLE,
+        payload = ots_ts_sql:encode_msg(#'DescribeTimeseriesTableRequest'{
+            table_name = maps:get(table_name, SQL)
+        }),
+        expect_resp = 'DescribeTimeseriesTableResponse',
         response_handler = fun describe_table_resp/1
     }.
 
-describe_table_resp(Req) -> {ok, Req}.
+describe_table_resp(Req) -> format(Req).
 
 %% -------------------------------------------------------------------------------------------------
 %% query meta
@@ -646,6 +650,16 @@ format(#'ListTimeseriesTableResponse'{table_metas = TableMetas}) ->
                 status = Status,
                 table_options = #'TimeseriesTableOptions'{
                     time_to_live = TimeToLive}} <- TableMetas]};
+format(#'DescribeTimeseriesTableResponse'{table_meta = #'TimeseriesTableMeta'{
+        table_name = TableName,
+        status = Status,
+        table_options = TableOptions}}) ->
+    TimeToLive =
+        case TableOptions of
+            #'TimeseriesTableOptions'{time_to_live = TTL} -> TTL;
+            _ -> undefined
+        end,
+    {ok, #{table_name => TableName, status => Status, time_to_live => TimeToLive}};
 format(#'ErrorResponse'{code = Code, message = Message}) ->
     {error, #{code => Code, message => Message}}.
 
