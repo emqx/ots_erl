@@ -63,10 +63,10 @@ test() ->
     Opts = [
         {pool, test_demo_pool},
         % {endpoint, <<"https://emqx-demo.cn-hangzhou.ots.aliyuncs.com">>},
-        {endpoint, <<"https://emqx-test.cn-hangzhou.ots.aliyuncs.com">>},
-        {instance, <<"emqx-test">>},
-        {access_key, <<"LTAI5tETEEvA4D7ctpSYvmEg">>},
-        {access_secret, <<"">>},
+        {endpoint, get_env("OTS_TEST_ENDPOINT")},
+        {instance, get_env("OTS_TEST_INSTANCE")},
+        {access_key, get_env("OTS_TEST_ACCESS_KEY_ID")},
+        {access_secret, get_env("OTS_TEST_ACCESS_KEY_SECRET")},
         {pool_size, 1},
         {clean_interval, 5000},
         {cache_timeout, 200}
@@ -110,3 +110,15 @@ read_response(Title, Message) ->
 
 loop_read_response(Title, Message) ->
     io:format("~p : ~0p~n", [Title, Message]).
+
+get_env(Name) ->
+    case os:getenv(Name) of
+        false ->
+            io:format("Missing required env var ~s~n", [Name]),
+            halt(1);
+        "" ->
+            io:format("Env var ~s is set but empty~n", [Name]),
+            halt(1);
+        Value ->
+            list_to_binary(Value)
+    end.

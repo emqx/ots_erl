@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  workflow_call:
+  pull_request:
+    branches:
+      - 'master'
+  push:
+    branches:
+      - 'master'
+      - 'ci/**'
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  eunit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - otp: 27
+            builder: ghcr.io/emqx/emqx-builder/6.1-8:1.18.3-27.3.4.2-8-ubuntu24.04
+          - otp: 28
+            builder: ghcr.io/emqx/emqx-builder/6.1-8:1.19.1-28.4.1-4-ubuntu24.04
+    container: ${{ matrix.builder }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Work around https://github.com/actions/checkout/issues/766
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Run eunit tests
+        run: rebar3 eunit
