@@ -14,7 +14,6 @@
 %% limitations under the License.
 %%--------------------------------------------------------------------
 
-
 -module(ots_ts_client_tests).
 
 -include_lib("eunit/include/eunit.hrl").
