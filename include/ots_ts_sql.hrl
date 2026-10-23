@@ -59,7 +59,8 @@
     access_secret       :: binary(),
     cache_table         :: atom(),
     version             = ?TS_CLIENT_VERSION,
-    state               = undefined
+    state               = undefined,
+    ssl_opts            :: list()
 }).
 
 -type ts_client() :: #ts_client{}.
