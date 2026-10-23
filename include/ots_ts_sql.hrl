@@ -55,11 +55,12 @@
     pool                :: atom(),
     endpoint            :: binary(),
     instance            :: binary(),
-    access_key          :: binary(),
-    access_secret       :: binary(),
+    access_key          :: binary() | function(),
+    access_secret       :: binary() | function(),
     cache_table         :: atom(),
     version             = ?TS_CLIENT_VERSION,
-    state               = undefined
+    state               = undefined,
+    ssl_opts            :: list()
 }).
 
 -type ts_client() :: #ts_client{}.

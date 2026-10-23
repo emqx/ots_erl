@@ -64,6 +64,7 @@ instance(#ts_client{instance = I}) -> I.
 access_key(#ts_client{access_key = K}) -> unwrap_secret(K).
 access_secret(#ts_client{access_secret = S}) -> unwrap_secret(S).
 cache_table(#ts_client{cache_table = C}) -> C.
+ssl_opts(#ts_client{ssl_opts = O}) -> O.
 
 %% -------------------------------------------------------------------------------------------------
 %% internal
@@ -71,13 +72,15 @@ do_start(Opts) ->
     Pool = proplists:get_value(pool, Opts),
     PoolBin = to_binary(Pool),
     CacheTable = binary_to_atom(<<"ts_cache_", PoolBin/binary>>, utf8),
+    SSLOpts = proplists:get_value(ssl_opts, Opts, []),
     Client = #ts_client{
         pool          = Pool,
         endpoint      = proplists:get_value(endpoint, Opts),
         instance      = proplists:get_value(instance, Opts),
         access_key    = proplists:get_value(access_key, Opts),
         access_secret = proplists:get_value(access_secret, Opts),
-        cache_table   = CacheTable
+        cache_table   = CacheTable,
+        ssl_opts      = SSLOpts
     },
     PoolSize = proplists:get_value(pool_size, Opts, 8),
     PoolOptions = [
@@ -160,12 +163,14 @@ http_request(Req = #ts_request{client = Client,
                                expect_resp = ExpectRespType}) ->
     Headers = ts_headers(Client, API, Payload),
     Pool = pool(Client),
+    SSLOpts = ssl_opts(Client),
     Options = [
         {pool, Pool},
         {connect_timeout, 10000},
         {recv_timeout, 30000},
         {follow_redirectm, true},
         {max_redirect, 5},
+        {ssl_options, SSLOpts},
         with_body
     ],
     Url = list_to_binary([endpoint(Client), API]),
